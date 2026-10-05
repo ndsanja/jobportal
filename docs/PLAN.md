@@ -211,7 +211,7 @@ jobportal/
 - `src/proxy.ts` me-refresh sesi; halaman privat dicek dengan `supabase.auth.getClaims()`.
 - `cacheComponents: true`: halaman publik (daftar, detail, kalender) memakai `"use cache"` + `cacheTag("opp:<id>")`/`cacheLife`; worker memanggil `POST /api/revalidate` (dengan secret) → `revalidateTag(tag, "max")`. Data user (rencana, readiness) dirender dinamis di dalam `<Suspense>`.
 - Di dalam scope `"use cache"` cookies tidak boleh dibaca, jadi data publik diambil dengan client Supabase tanpa sesi (publishable key).
-- Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (server/worker saja), `OPENROUTER_API_KEY`, `ADZUNA_APP_ID`/`ADZUNA_APP_KEY`, `JOOBLE_API_KEY`, `RESEND_API_KEY`, `REVALIDATE_SECRET`. Semua secret hanya disimpan di env Vercel dan GitHub Actions secrets.
+- Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (server/worker saja), `OPENROUTER_API_KEY`, `ADZUNA_APP_ID`/`ADZUNA_APP_KEY`, `JOOBLE_API_KEY`, `RESEND_API_KEY`, `FIRECRAWL_API_KEY`, `REVALIDATE_SECRET`. Semua secret hanya disimpan di env Vercel dan GitHub Actions secrets.
 
 ---
 
@@ -374,6 +374,7 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 | Hosting Next.js | Vercel Hobby ($0, non-komersial) | Vercel Pro $20/bulan **atau** VPS ±$5–10/bulan |
 | Worker ingestion | GitHub Actions ($0, repo privat: 2.000 menit/bulan) | tetap, atau VPS yang sama |
 | AI (DeepSeek via OpenRouter) | ±$2–5/bulan | sesuai volume |
+| Firecrawl | Free (±1.000 kredit/bulan) | Hobby ±$16/bulan bila perlu |
 | Email | Resend Free (3.000/bulan) | paket berbayar bila perlu |
 | API lowongan | Adzuna/Jooble key gratis (trial) | lisensi Adzuna (negosiasi), JSearch opsional |
 | Domain | ±Rp150–400 ribu/tahun | sama |
@@ -398,11 +399,12 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 - Repo **privat** → GitHub Actions 2.000 menit/bulan; anggaran job ±1.070 menit (lihat `DATA-SOURCES.md` §10a), pindah ke VPS bila mepet.
 - Admin: `ndsanja@gmail.com` (klaim `app_metadata.role = 'admin'`).
 - UI: Bahasa Indonesia.
+- Hosting: **Vercel** (tim `ndsanjas-projects`, sudah terkoneksi). Hobby untuk build/beta; naik ke Pro ($20/bulan) sebelum ada monetisasi.
+- Scraping halaman sulit (JS/PDF): **Firecrawl** (Free → Hobby); sumber terstruktur tetap tanpa Firecrawl. Detail di `DATA-SOURCES.md` §10c.
 
 **Masih terbuka**
-1. Hosting saat launch: Vercel Pro atau VPS.
-2. Kerja sama data: KP2MI (SISKOP2MI) dan lisensi komersial Adzuna.
-3. Domain & brand: mis. karirpro.id / .com.
+1. Kerja sama data: KP2MI (SISKOP2MI) dan lisensi komersial Adzuna.
+2. Domain & brand: mis. karirpro.id / .com.
 
 ---
 

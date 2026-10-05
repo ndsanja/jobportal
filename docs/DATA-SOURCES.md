@@ -1,7 +1,7 @@
 # Karir Pro — Peta Sumber Data & Cara Mendapatkannya
 
 > Pendamping `docs/PLAN.md`. Dokumen ini menjawab satu pertanyaan: **untuk setiap data yang dibutuhkan alur Karir Pro, datanya diambil dari mana, dengan cara apa, seberapa sering, dan siapa yang memverifikasi.**
-> Diperbarui 5 Oktober 2026. Keputusan yang dipakai: AI lewat **OpenRouter `deepseek/deepseek-v4.1-flash`**, repo **privat**, admin **ndsanja@gmail.com**, UI **Bahasa Indonesia**.
+> Diperbarui 5 Oktober 2026. Keputusan yang dipakai: hosting **Vercel** (tim `ndsanjas-projects`), scraping halaman sulit lewat **Firecrawl**, AI lewat **OpenRouter `deepseek/deepseek-v4.1-flash`**, repo **privat**, admin **ndsanja@gmail.com**, UI **Bahasa Indonesia**.
 
 ---
 
@@ -239,12 +239,28 @@ Tugas yang murni SQL (tutup otomatis setelah deadline, tandai data basi, membuat
 - **Kunci versi model:** simpan `model` & `prompt_version` di tabel `extractions`; pakai slug yang dipin (bukan "latest") agar hasil konsisten.
 - **Privasi:** jangan kirim scan paspor/KTP/SKCK ke model publik. Untuk fitur isi-otomatis dokumen (Fase 4) gunakan pengaturan provider OpenRouter yang menolak penyimpanan data (`provider.data_collection: "deny"`) dan minta persetujuan eksplisit user; default tetap input manual.
 
+### 10c. Firecrawl — dipakai untuk lapisan "halaman sulit"
+Firecrawl (API scraping: `scrape`, `map`, `crawl`, `extract`) **membantu**, tapi hanya untuk sebagian sumber:
+
+| Kasus | Pakai Firecrawl? | Alasan |
+|---|---|---|
+| Adzuna, Jooble, ATS (Greenhouse/Lever/…), BA Jobsuche, CSV register | **Tidak** | sudah JSON/CSV terstruktur; Firecrawl hanya menambah biaya |
+| Halaman resmi statis (Home Affairs, LPDP, Chevening, AAS) | Opsional | `fetch` + parser biasa cukup; Firecrawl berguna untuk output **markdown bersih** (hemat token AI, hash lebih stabil) |
+| Situs berat JavaScript / SPA (sebagian situs DAR DAMA, website program Erasmus Mundus, portal kampus, SISKOP2MI bila dirender JS) | **Ya** | merender JS tanpa kita menjalankan Playwright → hemat menit GitHub Actions |
+| PDF (booklet LPDP, guideline GKS, daftar okupasi DAMA) | **Ya** | mengubah PDF ke markdown/teks |
+| Menemukan semua link program (katalog Erasmus Mundus, daftar beasiswa kampus) | **Ya** — `map` | daftar URL satu situs dalam satu panggilan |
+| SEEK, Indeed, LinkedIn, situs yang ToS-nya melarang scraping | **Tidak** | larangan ToS tetap berlaku walau lewat Firecrawl |
+
+**Cara pakai di pipeline:** adapter `html-monitor` punya dua mode — `fetch` (default, gratis) dan `firecrawl` (diset per sumber di `sources.config.fetcher`). Firecrawl dipakai untuk mengambil **markdown**; ekstraksi field tetap oleh DeepSeek + Zod + validator kutipan (bukan endpoint `extract` Firecrawl), supaya satu jalur validasi dan biaya AI tetap murah.
+
+**Biaya (cek ulang di firecrawl.dev/pricing):** Free ±1.000 kredit/bulan; Hobby ±$16/bulan untuk 5.000 kredit. Perkiraan pemakaian: ±60–100 halaman sulit dipantau harian (~2.000–3.000 kredit/bulan) + Erasmus Mundus massal sekali per siklus (±200–300 kredit) → **Free cukup untuk awal, Hobby setelah sumber bertambah**. Firecrawl juga open-source (bisa self-host di VPS bila volume besar).
+
 ---
 
 ## 11. Playbook menambah sumber baru (dipakai admin & developer)
 
 1. **Cek legal:** baca ToS & robots.txt. Melarang? → jadikan **deeplink** saja.
-2. **Cari jalur terstruktur** (urut): API resmi → ATS publik → file CSV/XLSX/PDF → JSON-LD → sitemap/RSS → HTML.
+2. **Cari jalur terstruktur** (urut): API resmi → ATS publik → file CSV/XLSX/PDF → JSON-LD → sitemap/RSS → HTML (`fetch`; pakai Firecrawl hanya jika halaman dirender JavaScript atau berupa PDF sulit).
 3. **Daftarkan di `sources`:** `kind`, `authority`, `trust_score`, `config` (endpoint/slug/selector), jadwal, catatan atribusi.
 4. **Simpan fixture** (contoh respons) di `ingest/__fixtures__/` dan tulis test adapter.
 5. **Uji kering:** `bun run ingest --source=<slug> --dry-run` → cek hasil normalisasi.
@@ -274,4 +290,5 @@ Setelah itu data siap dipakai alur Profil → Readiness → Checklist → Rencan
 
 ## Sumber
 - OpenRouter DeepSeek: [deepseek-v4.1-flash (LLM Reference)](https://www.llmreference.com/model/deepseek-v4.1-flash/openrouter), [deepseek-v4-flash-latest](https://openrouter.ai/~deepseek/deepseek-v4-flash-latest)
+- Firecrawl: [ringkasan harga 2026](https://www.eesel.ai/blog/firecrawl-pricing), [costbench free plan](https://www.costbench.com/software/web-scraping/firecrawl/free-plan/)
 - Sumber lain: lihat lampiran `docs/PLAN.md`.

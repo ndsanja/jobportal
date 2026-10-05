@@ -37,6 +37,7 @@ export async function fetchPageText(
           formats: ["markdown"],
           onlyMainContent: true,
         }),
+        signal: AbortSignal.timeout(60_000),
       },
     );
     if (!response.ok)

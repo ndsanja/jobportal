@@ -85,6 +85,8 @@ curl -s -X POST "https://<domain>/api/ingest/run?slug=research-whv-462&dry_run=1
 ```
 Jadwal mingguan: seperti §4 dengan `?group=research`.
 
+Hasil dry-run memuat `errors` (galat per tahap, mis. `ekstrak homeaffairs.gov.au: timeout`) dan `timingsMs` (total waktu cari/baca/ekstrak). Satu kueri/halaman yang gagal atau timeout dilewati dan dicatat; run tetap selesai dengan hasil sebagian (`partial: true` bila waktu habis). Bila `extract` selalu timeout, coba model lain lewat environment `OPENROUTER_MODEL`.
+
 ## Pengaman bawaan
 - Endpoint hanya menerima `POST` + Bearer `CRON_SECRET` (503 bila secret belum diatur — tidak pernah terbuka).
 - Lowongan hilang dari feed ATS → ditutup, **kecuali** >50% hilang sekaligus (dianggap feed parsial; `closeSkipped: true`).

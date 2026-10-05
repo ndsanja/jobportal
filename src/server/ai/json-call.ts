@@ -55,7 +55,7 @@ export async function callJsonModel<T>(
           max_tokens: deps.maxTokens ?? 3000,
           response_format: { type: "json_object" },
         }),
-        signal: AbortSignal.timeout(90_000),
+        signal: AbortSignal.timeout(60_000),
       },
     );
 

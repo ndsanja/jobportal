@@ -11,7 +11,7 @@ export const defaultFetch: FetchLike = (input, init) =>
       Accept: "application/json",
       ...init?.headers,
     },
-    signal: init?.signal ?? AbortSignal.timeout(20_000),
+    signal: init?.signal ?? AbortSignal.timeout(30_000),
   });
 
 export async function getJson(

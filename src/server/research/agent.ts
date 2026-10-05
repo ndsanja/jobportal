@@ -19,6 +19,7 @@ import { fetchPageTextWithFallback } from "@/server/ingest/page-fetch";
 import type { FetchLike, IngestSource } from "@/server/ingest/types";
 import { decideSubject, type SubjectClaimRow } from "./decide";
 import { extractClaims } from "./extract";
+import { type Collected, gatherClaims } from "./gather";
 import { searchWeb } from "./search";
 
 type Db = SupabaseClient<Database>;
@@ -36,6 +37,8 @@ export type ResearchStats = {
   proposed: number;
   /** true bila waktu habis sebelum semua halaman terbaca. */
   partial: boolean;
+  errors: string[];
+  timingsMs: { search: number; fetch: number; extract: number };
   /** Hanya pada dry-run: contoh klaim hasil ekstraksi untuk diperiksa manusia. */
   preview?: Array<{
     field: string;
@@ -69,18 +72,6 @@ function must<T>(
   if (result.error) throw new Error(`${action}: ${result.error.message}`);
   return result.data as T;
 }
-
-type Collected = {
-  field: string;
-  value: unknown;
-  valueKey: string;
-  summary: string;
-  quote: string;
-  url: string;
-  domain: string;
-  tier: SourceTier;
-  pageHash: string;
-};
 
 /**
  * Agen riset: cari di web → baca halaman (resmi lebih dulu) → model mengekstrak klaim dengan
@@ -154,106 +145,62 @@ export async function runResearch(
     disputed: 0,
     proposed: 0,
     partial: false,
+    errors: [],
+    timingsMs: { search: 0, fetch: 0, extract: 0 },
   };
 
-  // --- 1. Cari ------------------------------------------------------------
-  const found = new Map<string, number>();
-  for (const query of config.queries) {
-    if (Date.now() > options.deadlineMs) {
-      stats.partial = true;
-      break;
-    }
-    const results = await searchWeb(query, {
-      apiKey: firecrawlKey,
-      limit: config.results_per_query,
-      fetch: deps.fetch,
-    });
-    stats.queries += 1;
-    for (const result of results)
-      if (!found.has(result.url)) found.set(result.url, found.size);
-  }
-  stats.pagesFound = found.size;
-
-  // Halaman resmi dibaca lebih dulu, lalu tepercaya, lalu komunitas (urutan pencarian dipertahankan).
-  const pages = [...found.entries()]
-    .map(([url, order]) => ({ url, order, tier: classifyTier(url, rules) }))
-    .sort(
-      (a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier] || a.order - b.order,
-    )
-    .slice(0, config.max_pages);
-
-  const { data: knownPages, error: knownError } = await db
-    .from("source_pages")
-    .select("url, content_hash")
-    .eq("source_id", source.id)
-    .in(
-      "url",
-      pages.map((p) => p.url),
-    );
-  if (knownError)
-    throw new Error(`Gagal membaca riwayat halaman: ${knownError.message}`);
-  const knownHash = new Map(
-    (knownPages ?? []).map((p) => [p.url, p.content_hash]),
-  );
-
-  // --- 2. Baca & ekstrak ----------------------------------------------------
-  const collected: Collected[] = [];
-  const readPages: Array<{ url: string; hash: string }> = [];
-  const unchangedUrls: string[] = [];
-
-  for (const page of pages) {
-    if (Date.now() > options.deadlineMs) {
-      stats.partial = true;
-      break;
-    }
-    let text: string;
-    try {
-      ({ text } = await fetchPageTextWithFallback(page.url, {
-        fetch: deps.fetch,
-        firecrawlKey,
-        maxChars: config.max_chars,
-      }));
-    } catch {
-      stats.pagesFailed += 1;
-      continue;
-    }
-    const hash = sha256(normalizeForMatch(text));
-    if (knownHash.get(page.url) === hash) {
-      stats.pagesUnchanged += 1;
-      unchangedUrls.push(page.url);
-      continue;
-    }
-
-    const extraction = await extractClaims(
-      text,
-      {
-        description: config.description,
-        fields: config.fields ?? CLAIM_FIELD_NAMES,
-      },
-      { apiKey, model, fetch: deps.fetch, now: options.now },
-    );
-    if (!extraction.ok) {
-      stats.pagesFailed += 1;
-      continue;
-    }
-    stats.pagesRead += 1;
-    stats.claimsExtracted += extraction.claims.length;
-    stats.claimsRejected += extraction.rejected.length;
-    readPages.push({ url: page.url, hash });
-    for (const claim of extraction.claims) {
-      collected.push({
-        field: claim.field,
-        value: claim.value,
-        valueKey: valueKey(claim.value),
-        summary: claim.summary,
-        quote: claim.evidence,
-        url: page.url,
-        domain: domainOf(page.url),
-        tier: page.tier,
-        pageHash: hash,
-      });
-    }
-  }
+  // --- 1-2. Kumpulkan: cari → baca → ekstrak (tahan banting; lihat gather.ts) ----
+  const doFetch = deps.fetch;
+  const {
+    collected,
+    readPages,
+    unchangedUrls,
+    stats: gathered,
+  } = await gatherClaims({
+    queries: config.queries,
+    maxPages: config.max_pages,
+    rules,
+    // Sisakan ruang agar satu panggilan lambat tidak melewati batas fungsi (300 dtk).
+    deadlineMs: options.deadlineMs - 75_000,
+    search: (query) =>
+      searchWeb(query, {
+        apiKey: firecrawlKey,
+        limit: config.results_per_query,
+        fetch: doFetch,
+      }),
+    loadKnownHashes: async (urls) => {
+      const { data, error } = await db
+        .from("source_pages")
+        .select("url, content_hash")
+        .eq("source_id", source.id)
+        .in("url", urls);
+      if (error)
+        throw new Error(`Gagal membaca riwayat halaman: ${error.message}`);
+      return new Map(
+        (data ?? []).flatMap((p) =>
+          p.content_hash ? [[p.url, p.content_hash] as const] : [],
+        ),
+      );
+    },
+    fetchPage: async (url) =>
+      (
+        await fetchPageTextWithFallback(url, {
+          fetch: doFetch,
+          firecrawlKey,
+          maxChars: config.max_chars,
+        })
+      ).text,
+    extract: (text) =>
+      extractClaims(
+        text,
+        {
+          description: config.description,
+          fields: config.fields ?? CLAIM_FIELD_NAMES,
+        },
+        { apiKey, model, fetch: doFetch, now: options.now },
+      ),
+  });
+  Object.assign(stats, gathered);
 
   // --- 3a. Dry-run: nilai di memori saja ------------------------------------
   if (options.dryRun) {

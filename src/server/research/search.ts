@@ -60,6 +60,7 @@ export async function searchWeb(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ query, limit: options.limit }),
+    signal: AbortSignal.timeout(45_000),
   });
   if (!response.ok) throw new Error(`Pencarian gagal: HTTP ${response.status}`);
   return parseSearchResponse(await response.json());

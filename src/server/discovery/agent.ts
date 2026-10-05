@@ -35,6 +35,8 @@ export type DiscoveryStats = {
   newCandidates: number;
   updatedCandidates: number;
   linksVerified: number;
+  /** Kandidat yang tidak diantrekan: tanpa tautan resmi atau skor di bawah `min_score`. */
+  lowQuality: number;
   partial: boolean;
   errors: string[];
   timingsMs: { search: number; fetch: number; extract: number; verify: number };
@@ -154,6 +156,7 @@ export async function runDiscovery(
     newCandidates: 0,
     updatedCandidates: 0,
     linksVerified: 0,
+    lowQuality: 0,
     partial: false,
     errors: [],
     timingsMs: { search: 0, fetch: 0, extract: 0, verify: 0 },
@@ -224,12 +227,16 @@ export async function runDiscovery(
       }
       const extractStart = Date.now();
       try {
-        const result = await extractCandidates(page, config.target, {
-          apiKey,
-          model,
-          fetch: deps.fetch,
-          now,
-        });
+        const result = await extractCandidates(
+          { ...page, url },
+          config.target,
+          {
+            apiKey,
+            model,
+            fetch: deps.fetch,
+            now,
+          },
+        );
         if (!result.ok) {
           stats.pagesFailed += 1;
           note(`temukan ${host}: ${result.error}`);
@@ -365,8 +372,17 @@ export async function runDiscovery(
     };
   });
 
+  // Antrean admin hanya menerima kandidat bertautan resmi dengan skor cukup (kandidat lama tetap diperbarui).
+  const queued = scored.filter(
+    (c) =>
+      previousByKey.has(c.nameKey) ||
+      c.duplicateOf ||
+      (c.officialUrl !== null && c.score >= config.min_score),
+  );
+  stats.lowQuality = scored.length - queued.length;
+
   if (options.dryRun) {
-    stats.preview = scored
+    stats.preview = queued
       .sort((a, b) => b.score - a.score)
       .map((c) => ({
         name: c.name,
@@ -380,14 +396,14 @@ export async function runDiscovery(
         duplicateOf: c.duplicateOf,
         source: c.sources[0]?.url ?? "",
       }));
-    stats.newCandidates = scored.filter(
+    stats.newCandidates = queued.filter(
       (c) => !c.duplicateOf && !previousByKey.has(c.nameKey),
     ).length;
     return stats;
   }
 
   // --- 5. Simpan ke antrean admin ----------------------------------------------
-  for (const c of scored) {
+  for (const c of queued) {
     const prior = previousByKey.get(c.nameKey);
     if (prior) {
       const evidence = [

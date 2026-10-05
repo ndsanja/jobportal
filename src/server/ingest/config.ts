@@ -120,6 +120,8 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     max_chars: z.number().int().min(5000).max(120000).default(40000),
     /** Maksimum tautan resmi kandidat baru yang diperiksa per run. */
     verify_links: z.number().int().min(0).max(25).default(12),
+    /** Skor minimum kandidat baru agar masuk antrean admin. */
+    min_score: z.number().int().min(0).max(100).default(50),
   }),
   z.object({
     provider: z.literal("adzuna"),

@@ -11,7 +11,7 @@ import {
 } from "@/domain/claims";
 import { callJsonModel, type FetchLike } from "@/server/ai/json-call";
 
-export const BRIEF_PROMPT_VERSION = "brief-v2";
+export const BRIEF_PROMPT_VERSION = "brief-v3";
 
 export type BriefClaim = {
   id: string;
@@ -41,13 +41,14 @@ Aturan ketat:
 4. Bila dua klaim saling bertentangan, utamakan yang accepted/lebih tinggi keyakinannya/lebih baru, dan sebutkan pertentangannya di "uncertainties".
 5. Urutan butir dalam bagian harus logis (alur: langkah awal → akhir). Kalimat ringkas, langsung, ramah, tanpa basa-basi.
 6. "headline": satu kalimat inti yang paling penting bagi pemohon (mis. apakah harus ikut ballot). "summary": 2–4 kalimat ringkasan menyeluruh.
-7. Tulis untuk orang awam. JANGAN menyebut istilah internal seperti "klaim", "accepted", "disputed", "keyakinan", atau rujukan "c3" di dalam teks; gunakan frasa seperti "menurut sumber resmi" atau "laporan yang belum resmi".
-8. Di "uncertainties" juga sebutkan informasi penting yang TIDAK ditemukan (mis. "Tanggal pembukaan ballot belum ditemukan di sumber") bila relevan dengan bagian yang kosong; butir ini tetap harus merujuk ke klaim terkait.
+7. JANGAN menulis pernyataan relatif terhadap hari ini ("tanggal ini telah lewat", "belum lewat", "X hari lagi"): panduan disimpan dan dibaca di hari lain; aplikasi menghitung sendiri sisa waktu. Cukup tulis tanggal, jam, dan zona waktunya.
+8. Tulis untuk orang awam. JANGAN menyebut istilah internal seperti "klaim", "accepted", "disputed", "keyakinan", atau rujukan "c3" di dalam teks; gunakan frasa seperti "menurut sumber resmi" atau "laporan yang belum resmi".
+9. Di "uncertainties" juga sebutkan informasi penting yang TIDAK ditemukan (mis. "Tanggal pembukaan ballot belum ditemukan di sumber") bila relevan dengan bagian yang kosong; butir ini tetap harus merujuk ke klaim terkait.
 
 Bagian yang tersedia (id: judul), pakai yang relevan saja:
 ${SECTION_GUIDE}
 
-Petunjuk bidang → bagian: process.application_mode/process.ballot/process.step → cara_daftar; schedule.event/process.timeline → jadwal (urut kronologis, sebut jam & zona waktu bila ada, tandai yang sudah lewat dibanding "Hari ini"); eligibility.indonesia/requirement.* → syarat (requirement.document → dokumen); funding.*/benefit.amount → pendanaan; study.level/study.field/program.quota → program; fee.application → biaya; condition.stay/obligation.return → ketentuan.
+Petunjuk bidang → bagian: process.application_mode/process.ballot/process.step → cara_daftar; schedule.event/process.timeline → jadwal (urut kronologis, sebut jam & zona waktu bila ada); eligibility.indonesia/requirement.* → syarat (requirement.document → dokumen); funding.*/benefit.amount → pendanaan; study.level/study.field/program.quota → program; fee.application → biaya; condition.stay/obligation.return → ketentuan.
 Bila ada tenggat pendaftaran yang belum lewat, sebutkan di "headline" beserta tanggalnya. Bila "eligibility.indonesia" bernilai false dan accepted, headline wajib menyatakan WNI tidak memenuhi syarat.
 
 Format: {"headline": "...", "summary": "...", "sections": [{"id": "cara_daftar", "items": [{"text": "...", "claim_ids": ["c1","c4"]}]}], "uncertainties": [{"text": "...", "claim_ids": ["c7"]}]}`;

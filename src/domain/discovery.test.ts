@@ -203,3 +203,47 @@ describe("pickQueries & scoreCandidate", () => {
     expect(weak).toBe(20);
   });
 });
+
+describe("perbaikan dari uji nyata", () => {
+  it("alias dalam kurung tidak membedakan nama", () => {
+    expect(nameKey("MEXT Scholarship (Monbukagakusho)")).toBe(
+      nameKey("MEXT Scholarship"),
+    );
+  });
+
+  it("tautan ke situs agregator yang sama bukan tautan resmi", () => {
+    const result = validateCandidates(
+      {
+        candidates: [
+          {
+            name: "Henan Government Scholarship",
+            organizer: null,
+            kind: "scholarship",
+            country: "CN",
+            levels: [],
+            official_link: 1,
+            open_to_indonesia: "unknown",
+            deadline: null,
+            summary:
+              "Beasiswa pemerintah provinsi Henan untuk mahasiswa internasional.",
+            evidence: "Henan Government Scholarship for international students",
+          },
+        ],
+      },
+      {
+        text: "Henan Government Scholarship for international students is available.",
+        links: [
+          {
+            text: "Read more",
+            url: "https://gradualin.com/henan-scholarship/",
+          },
+        ],
+        url: "https://gradualin.com/top-10/",
+      },
+      "scholarship",
+      new Date("2026-10-06"),
+    );
+    if ("error" in result) throw new Error(result.error);
+    expect(result.candidates[0]?.officialUrl).toBeNull();
+  });
+});

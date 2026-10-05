@@ -41,7 +41,7 @@ export type CandidateExtraction =
 
 /** Meminta model menemukan kandidat peluang di satu halaman; hasil divalidasi ketat sebelum dipakai. */
 export async function extractCandidates(
-  page: { text: string; links: PageLink[] },
+  page: { text: string; links: PageLink[]; url?: string },
   target: "scholarship" | "program",
   deps: { apiKey: string; model: string; fetch?: FetchLike; now: Date },
 ): Promise<CandidateExtraction> {
@@ -66,7 +66,7 @@ export async function extractCandidates(
     (json) => {
       const checked = validateCandidates(
         json,
-        { text: page.text, links },
+        { text: page.text, links, url: page.url },
         target,
         deps.now,
       );

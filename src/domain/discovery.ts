@@ -79,6 +79,14 @@ export function extractMarkdownLinks(
   return uniqueLinks(links, max);
 }
 
+const hostOnly = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return url;
+  }
+};
+
 const NAME_STOPWORDS = new Set([
   "the",
   "of",
@@ -116,7 +124,8 @@ const NAME_STOPWORDS = new Set([
 
 /** Token bermakna dari nama program (tanpa kata umum seperti "scholarship", "program", tahun). */
 export function nameTokens(name: string): string[] {
-  return normalizeText(name)
+  // Isi kurung adalah alias ("MEXT Scholarship (Monbukagakusho)"), bukan pembeda program.
+  return normalizeText(name.replace(/\([^)]*\)/g, " "))
     .split(" ")
     .filter(
       (t) => t.length > 1 && !NAME_STOPWORDS.has(t) && !/^\d{4}$/.test(t),
@@ -265,7 +274,7 @@ export type DiscoveredCandidate = {
  */
 export function validateCandidates(
   json: unknown,
-  page: { text: string; links: PageLink[] },
+  page: { text: string; links: PageLink[]; url?: string },
   target: "scholarship" | "program",
   now: Date,
 ):
@@ -311,7 +320,13 @@ export function validateCandidates(
         rejected.push({ name, reason: "Nomor tautan tidak ada" });
         continue;
       }
-      officialUrl = link.url;
+      // Tautan ke situs yang sama dengan halaman agregator bukan situs resmi penyelenggara.
+      officialUrl =
+        page.url &&
+        hostOnly(link.url) === hostOnly(page.url) &&
+        !isInstitutionalHost(link.url)
+          ? null
+          : link.url;
     }
     let deadline: string | null = c.deadline ?? null;
     if (deadline) {

@@ -54,6 +54,8 @@ export async function callJsonModel<T>(
           temperature: 0,
           max_tokens: deps.maxTokens ?? 3000,
           response_format: { type: "json_object" },
+          // Ekstraksi fakta tidak butuh penalaran panjang; menonaktifkannya jauh lebih cepat & murah.
+          reasoning: { enabled: false },
         }),
         signal: AbortSignal.timeout(60_000),
       },

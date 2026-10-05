@@ -88,6 +88,18 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     closed_refresh_days: z.number().int().min(1).max(180).default(30),
   }),
   z.object({
+    /** Agen penemu career page: mencari board ATS publik perusahaan dan mendaftarkannya sebagai sumber. */
+    provider: z.literal("ats_discovery"),
+    group: z.string().default("discovery"),
+    queries: z.array(z.string().min(5).max(200)).min(1).max(40),
+    queries_per_run: z.number().int().min(1).max(12).default(6),
+    results_per_query: z.number().int().min(1).max(10).default(10),
+    /** Maksimum board baru yang divalidasi per run. */
+    max_new: z.number().int().min(1).max(20).default(8),
+    /** Porsi minimum lowongan berlokasi di Australia agar board langsung aktif. */
+    min_au_share: z.number().min(0).max(1).default(0.5),
+  }),
+  z.object({
     /** Penilaian AI per lowongan: kelayakan WNI, jalur visa, syarat kunci (berkutipan dari iklan). */
     provider: z.literal("job_enrichment"),
     group: z.string().default("enrich"),

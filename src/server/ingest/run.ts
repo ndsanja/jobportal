@@ -2,6 +2,10 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import { type DiscoveryStats, runDiscovery } from "@/server/discovery/agent";
+import {
+  type AtsDiscoveryStats,
+  runAtsDiscovery,
+} from "@/server/discovery/ats";
 import { type EnrichStats, runJobEnrichment } from "@/server/enrich/jobs";
 import { type ResearchStats, runResearch } from "@/server/research/agent";
 import {
@@ -56,7 +60,8 @@ export type SourceOutcome = {
     | ResearchStats
     | OpportunityResearchStats
     | DiscoveryStats
-    | EnrichStats;
+    | EnrichStats
+    | AtsDiscoveryStats;
   error?: string;
 };
 
@@ -195,6 +200,12 @@ async function processSource(
       let failed = false;
       if (provider === "research_agent") {
         stats = await runResearch(db, source, deps, researchOptions);
+      } else if (provider === "ats_discovery") {
+        stats = await runAtsDiscovery(db, source, deps, {
+          dryRun: options.dryRun,
+          now: startedAt,
+          deadlineMs: options.deadlineMs,
+        });
       } else if (provider === "job_enrichment") {
         stats = await runJobEnrichment(db, source, deps, {
           dryRun: options.dryRun,

@@ -15,6 +15,11 @@ const BADGES: Record<DisplayState, { label: string; className: string }> = {
     label: "Dari komunitas",
     className: "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200",
   },
+  needs_review: {
+    label: "Menunggu verifikasi",
+    className:
+      "bg-violet-100 text-violet-900 dark:bg-violet-950 dark:text-violet-200",
+  },
   stale: {
     label: "Perlu verifikasi ulang",
     className:

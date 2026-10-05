@@ -89,6 +89,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      extractions: {
+        Row: {
+          content_hash: string;
+          created_at: string;
+          id: string;
+          model: string;
+          opportunity_id: string | null;
+          page_url: string;
+          payload: Json;
+          prompt_version: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          source_id: string;
+          status: string;
+        };
+        Insert: {
+          content_hash: string;
+          created_at?: string;
+          id?: string;
+          model: string;
+          opportunity_id?: string | null;
+          page_url: string;
+          payload: Json;
+          prompt_version: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          source_id: string;
+          status?: string;
+        };
+        Update: {
+          content_hash?: string;
+          created_at?: string;
+          id?: string;
+          model?: string;
+          opportunity_id?: string | null;
+          page_url?: string;
+          payload?: Json;
+          prompt_version?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          source_id?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "extractions_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "extractions_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ingest_runs: {
         Row: {
           error: string | null;
@@ -318,6 +378,7 @@ export type Database = {
           id: string;
           is_estimated: boolean;
           kind: string;
+          label: string | null;
           opportunity_id: string;
           source_url: string | null;
           starts_on: string;
@@ -329,6 +390,7 @@ export type Database = {
           id?: string;
           is_estimated?: boolean;
           kind: string;
+          label?: string | null;
           opportunity_id: string;
           source_url?: string | null;
           starts_on: string;
@@ -340,6 +402,7 @@ export type Database = {
           id?: string;
           is_estimated?: boolean;
           kind?: string;
+          label?: string | null;
           opportunity_id?: string;
           source_url?: string | null;
           starts_on?: string;

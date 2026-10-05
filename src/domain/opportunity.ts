@@ -220,6 +220,7 @@ export function verificationSlaDays(
 }
 
 export type DisplayState =
+  | "needs_review"
   | "closed"
   | "stale"
   | "verified"
@@ -237,6 +238,8 @@ export function displayState(input: {
   if (input.status === "closed" || input.status === "archived") return "closed";
   if (input.closesAt && input.closesAt.getTime() < input.now.getTime())
     return "closed";
+  // Data awal yang belum dicocokkan dengan halaman resmi oleh sistem pemantau/admin.
+  if (input.verificationStatus === "needs_review") return "needs_review";
 
   const ageDays =
     (input.now.getTime() - input.lastVerifiedAt.getTime()) / DAY_MS;

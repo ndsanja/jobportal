@@ -237,6 +237,24 @@ describe("displayState", () => {
     ).toBe("closed");
   });
 
+  it("needs_review untuk data awal yang belum diverifikasi (kecuali sudah ditutup)", () => {
+    expect(
+      displayState({
+        ...base,
+        verificationStatus: "needs_review",
+        lastVerifiedAt: days(1),
+      }),
+    ).toBe("needs_review");
+    expect(
+      displayState({
+        ...base,
+        verificationStatus: "needs_review",
+        closesAt: days(1),
+        lastVerifiedAt: days(1),
+      }),
+    ).toBe("closed");
+  });
+
   it("stale bila lewat SLA (lowongan 7 hari)", () => {
     expect(displayState({ ...base, lastVerifiedAt: days(8) })).toBe("stale");
     expect(displayState({ ...base, lastVerifiedAt: days(6) })).toBe(

@@ -31,6 +31,10 @@ export async function runAdapter(
       return fetchLever(config, deps.fetch);
     case "ashby":
       return fetchAshby(config, deps.fetch);
+    case "page_monitor":
+      throw new Error(
+        `Sumber "${source.slug}" adalah pemantau halaman, bukan adapter lowongan.`,
+      );
     case "smartrecruiters":
       return fetchSmartRecruiters(config, deps.fetch);
     case "adzuna": {

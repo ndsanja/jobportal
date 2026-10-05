@@ -11,15 +11,25 @@ export default async function AdminPage() {
   await requireAdmin();
   const supabase = await createClient();
 
-  const [sources, countries, documentTypes] = await Promise.all([
-    supabase.from("sources").select("id", { count: "exact", head: true }),
-    supabase.from("countries").select("code", { count: "exact", head: true }),
-    supabase
-      .from("document_types")
-      .select("code", { count: "exact", head: true }),
-  ]);
+  const [sources, countries, documentTypes, pending, opportunities] =
+    await Promise.all([
+      supabase.from("sources").select("id", { count: "exact", head: true }),
+      supabase.from("countries").select("code", { count: "exact", head: true }),
+      supabase
+        .from("document_types")
+        .select("code", { count: "exact", head: true }),
+      supabase
+        .from("extractions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
+      supabase
+        .from("opportunities")
+        .select("id", { count: "exact", head: true }),
+    ]);
 
   const stats = [
+    { label: "Peluang", value: opportunities.count ?? 0 },
+    { label: "Menunggu review", value: pending.count ?? 0 },
     { label: "Sumber data", value: sources.count ?? 0 },
     { label: "Negara", value: countries.count ?? 0 },
     { label: "Jenis dokumen", value: documentTypes.count ?? 0 },
@@ -36,7 +46,7 @@ export default async function AdminPage() {
       <h1 className="mt-6 text-2xl font-semibold tracking-tight">
         Panel admin
       </h1>
-      <dl className="mt-8 grid grid-cols-3 gap-4">
+      <dl className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -47,6 +57,16 @@ export default async function AdminPage() {
           </div>
         ))}
       </dl>
+      <ul className="mt-8 space-y-2 text-sm">
+        <li>
+          <Link
+            href="/admin/review"
+            className="font-medium underline underline-offset-4"
+          >
+            Antrean review ekstraksi ({pending.count ?? 0}) →
+          </Link>
+        </li>
+      </ul>
     </main>
   );
 }

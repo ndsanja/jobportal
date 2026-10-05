@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import { runAdapter } from "./adapters";
 import { defaultFetch } from "./http";
+import { type MonitorStats, runMonitor } from "./monitor";
 import { type PublishStats, publishItems } from "./publish";
 import type { FetchLike, IngestSource } from "./types";
 
@@ -19,7 +20,7 @@ const SCHEDULE_MS: Record<string, number | null> = {
 };
 
 /** Jenis sumber yang sudah punya adapter. Jenis lain dilewati sampai adapter-nya ada. */
-const SUPPORTED_KINDS: SourceRow["kind"][] = ["api", "ats"];
+const SUPPORTED_KINDS: SourceRow["kind"][] = ["api", "ats", "monitor"];
 const FAILING_AFTER = 3;
 
 export type RunOptions = {
@@ -38,7 +39,7 @@ export type RunOptions = {
 export type SourceOutcome = {
   slug: string;
   status: "success" | "partial" | "failed";
-  stats?: PublishStats;
+  stats?: PublishStats | MonitorStats;
   error?: string;
 };
 
@@ -150,25 +151,42 @@ async function processSource(
 
   let outcome: SourceOutcome;
   try {
-    const result = await runAdapter(source, {
-      fetch: options.fetch,
-      env: {
-        ADZUNA_APP_ID: process.env.ADZUNA_APP_ID,
-        ADZUNA_APP_KEY: process.env.ADZUNA_APP_KEY,
-      },
-    });
-    const stats = await publishItems(db, source, result, {
-      dryRun: options.dryRun,
-      now: startedAt,
-    });
-    const mostlyBroken =
-      stats.fetched + stats.skipped > 0 &&
-      stats.skipped / (stats.fetched + stats.skipped) > 0.2;
-    outcome = {
-      slug: row.slug,
-      status: mostlyBroken ? "partial" : "success",
-      stats,
-    };
+    if (row.kind === "monitor") {
+      const stats = await runMonitor(
+        db,
+        source,
+        {
+          fetch: options.fetch,
+          env: {
+            FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
+            OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+            OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
+          },
+        },
+        { dryRun: options.dryRun, now: startedAt },
+      );
+      outcome = { slug: row.slug, status: "success", stats };
+    } else {
+      const result = await runAdapter(source, {
+        fetch: options.fetch,
+        env: {
+          ADZUNA_APP_ID: process.env.ADZUNA_APP_ID,
+          ADZUNA_APP_KEY: process.env.ADZUNA_APP_KEY,
+        },
+      });
+      const stats = await publishItems(db, source, result, {
+        dryRun: options.dryRun,
+        now: startedAt,
+      });
+      const mostlyBroken =
+        stats.fetched + stats.skipped > 0 &&
+        stats.skipped / (stats.fetched + stats.skipped) > 0.2;
+      outcome = {
+        slug: row.slug,
+        status: mostlyBroken ? "partial" : "success",
+        stats,
+      };
+    }
   } catch (error) {
     outcome = { slug: row.slug, status: "failed", error: errorMessage(error) };
   }

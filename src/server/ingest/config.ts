@@ -18,6 +18,14 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
   atsBase.extend({ provider: z.literal("ashby") }),
   atsBase.extend({ provider: z.literal("smartrecruiters") }),
   z.object({
+    provider: z.literal("page_monitor"),
+    group: z.string().default("pages"),
+    url: z.url(),
+    opportunity_slug: z.string().min(1),
+    fetcher: z.enum(["fetch", "firecrawl"]).default("fetch"),
+    max_chars: z.number().int().min(2000).max(120000).default(40000),
+  }),
+  z.object({
     provider: z.literal("adzuna"),
     group: z.string().default("jobs"),
     country: z
@@ -45,3 +53,7 @@ export type AtsConfig = Extract<
   { provider: "greenhouse" | "lever" | "ashby" | "smartrecruiters" }
 >;
 export type AdzunaConfig = Extract<SourceConfig, { provider: "adzuna" }>;
+export type PageMonitorConfig = Extract<
+  SourceConfig,
+  { provider: "page_monitor" }
+>;

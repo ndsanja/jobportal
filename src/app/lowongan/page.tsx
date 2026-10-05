@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SiteHeader } from "@/components/site-header";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
 import { readAttributes, signalLabels } from "@/lib/attributes";
@@ -76,17 +77,7 @@ export default async function LowonganPage({
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-5">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
-          Karir Pro
-        </Link>
-        <Link
-          href="/masuk"
-          className="text-sm font-medium underline-offset-4 hover:underline"
-        >
-          Masuk
-        </Link>
-      </header>
+      <SiteHeader />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 pb-16">
         <h1 className="text-2xl font-semibold tracking-tight">

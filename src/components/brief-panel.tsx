@@ -159,7 +159,22 @@ export function BriefPanel({
   claims: PublicClaim[];
 }) {
   const byId = new Map(claims.map((c) => [c.id, c]));
-  const { content } = brief;
+  // Panduan hanya boleh memuat butir yang klaim dasarnya masih ada (mis. setelah klaim dibangun ulang).
+  const content = {
+    ...brief.content,
+    sections: brief.content.sections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          item.claim_ids.some((id) => byId.has(id)),
+        ),
+      }))
+      .filter((section) => section.items.length > 0),
+    uncertainties: brief.content.uncertainties.filter((item) =>
+      item.claim_ids.some((id) => byId.has(id)),
+    ),
+  };
+  if (content.sections.length === 0) return null;
   const headings = new Map<string, string>(
     BRIEF_SECTIONS.map((s) => [s.id, s.heading]),
   );

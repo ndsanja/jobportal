@@ -244,8 +244,8 @@ export async function runResearch(
         recency: recencyOf.get(query),
       }),
     loadKnownHashes: async (urls) => {
-      // Dry-run tidak menyimpan apa pun, jadi selalu baca ulang (bukan dilewati karena hash lama).
-      if (options.dryRun) return new Map<string, string>();
+      // Dry-run tidak menyimpan apa pun, dan reset membangun ulang: keduanya wajib membaca ulang semua halaman.
+      if (options.dryRun || options.reset) return new Map<string, string>();
       const { data, error } = await db
         .from("source_pages")
         .select("url, content_hash")
@@ -406,17 +406,6 @@ export async function runResearch(
   }
 
   // --- 3b. Simpan klaim + bukti ---------------------------------------------
-  if (options.reset) {
-    must(
-      await db
-        .from("claims")
-        .delete()
-        .eq("subject_key", subject.subject_key)
-        .eq("decided_by", "system"),
-      "Gagal mereset klaim",
-    );
-  }
-
   const touchedClaimIds = new Set<string>();
   if (readPages.length > 0) {
     // Halaman yang dibaca ulang menggantikan bukti lamanya (isi/versi prompt bisa berbeda).
@@ -559,9 +548,15 @@ export async function runResearch(
       .eq("subject_key", subject.subject_key),
     "Gagal membaca klaim subjek",
   );
+  // Reset: klaim sistem yang tidak ditemukan lagi pada run ini ikut dibuang, tetapi hanya bila run lengkap
+  // (tidak partial, tanpa halaman gagal) agar run yang terpotong tidak mengosongkan halaman publik.
+  const complete = !stats.partial && stats.pagesFailed === 0;
   const orphanIds = all
     .filter(
-      (row) => row.decided_by === "system" && row.claim_evidence.length === 0,
+      (row) =>
+        row.decided_by === "system" &&
+        (row.claim_evidence.length === 0 ||
+          (options.reset && complete && !touchedClaimIds.has(row.id))),
     )
     .map((row) => row.id);
   for (const idChunk of chunked(orphanIds, 50)) {

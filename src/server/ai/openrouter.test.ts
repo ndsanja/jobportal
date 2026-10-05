@@ -42,7 +42,7 @@ describe("extractScholarshipFacts", () => {
     });
     if (!result.ok) throw new Error(result.error);
     expect(result.accepted.dates[0]?.starts_on).toBe("2026-04-30");
-    expect(result.model).toBe("deepseek/deepseek-v4.1-flash");
+    expect(result.model).toBe("openai/gpt-6-luna");
 
     const [, init] = fetchMock.mock.calls[0] as unknown as [
       string,

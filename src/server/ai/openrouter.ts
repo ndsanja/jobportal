@@ -6,7 +6,7 @@ import {
 import { callJsonModel, type FetchLike } from "./json-call";
 
 export const PROMPT_VERSION = "scholarship-v1";
-export const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
+export const DEFAULT_MODEL = "openai/gpt-6-luna";
 
 const SYSTEM_PROMPT = `Anda mengekstrak fakta beasiswa dari TEKS HALAMAN RESMI. Balas HANYA dengan satu objek JSON.
 Aturan ketat:

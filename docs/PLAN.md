@@ -3,6 +3,18 @@
 > **Status:** rencana, belum ada kode · **Tanggal:** 5 Oktober 2026
 > **Repo:** `ndsanja/jobportal` (privat) · **Supabase:** project `jobportal` (`kmytmtqidmnxtdmrmyfs`), region `ap-southeast-1` (Singapura), Postgres 17, plan Free (org `parelabs`). Saat rencana ini ditulis belum ada tabel, migrasi, maupun edge function.
 
+## Status implementasi (diperbarui 5 Oktober 2026)
+
+| Bagian | Status |
+|---|---|
+| Fase 0 — fondasi (Next.js 16 + Bun, Supabase, login, admin) | ✅ selesai, sudah di Vercel |
+| Fase 1 — lowongan: Adzuna, adapter career page (Greenhouse/Lever/Ashby/SmartRecruiters), `/lowongan` | ✅ Adzuna berjalan (242 lowongan); 10 career page berstatus draft menunggu uji kering |
+| Beasiswa: 10 program, `/beasiswa`, kalender, pemantau halaman + ekstraksi AI + antrean review | ✅ kode & data awal ada; pemantau (draft) menunggu uji kering; data awal berstatus "Menunggu verifikasi" |
+| Fase 2 — profil, dokumen (metadata), Rencana ("Tambah ke Rencana") | ✅ ada; belum diuji dengan sesi login nyata |
+| Fase 2 — Requirement Matrix, Readiness, rekomendasi, checklist gabungan | ⏳ butuh data syarat resmi yang terverifikasi (WHV, beasiswa) |
+| Fase 3 — timeline, countdown ICS, notifikasi (email/push), ballot tracker WHV | ⏳ belum |
+| Penjadwalan otomatis `pg_cron` | ⏳ SQL siap di `docs/INGESTION.md`, belum dipasang (butuh `CRON_SECRET`) |
+
 ## 0. Ringkasan
 
 **Bisa, dan stack ini cocok.** Next.js 16 + Bun + Supabase sudah mencakup hampir semua kebutuhan Karir Pro: web app & SEO, login, database, penyimpanan dokumen, keamanan per user (RLS), cron, full-text search (konfigurasi `indonesian` & `english` sudah tersedia di project), sampai vector search untuk rekomendasi. Yang perlu ditambahkan hanya tiga: **pipeline ingestion** (Route Handlers Next.js yang dijadwalkan `pg_cron` Supabase), **AI extraction** (OpenRouter/DeepSeek), dan **email** (Resend). Di tahap ini tidak perlu backend terpisah (Rust/Axum).

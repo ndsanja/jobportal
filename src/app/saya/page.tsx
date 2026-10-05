@@ -11,11 +11,45 @@ export const metadata: Metadata = {
 export default async function SayaPage() {
   const user = await requireUser("/saya");
   const supabase = await createClient();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, onboarding_completed")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, plan, documents] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name, onboarding_completed")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("plan_items")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id),
+    supabase
+      .from("user_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("status", "have"),
+  ]);
+
+  const cards = [
+    {
+      href: "/onboarding",
+      title: "Profil & tujuan",
+      body: profile?.onboarding_completed
+        ? "Perbarui tujuan, negara, dan data diri Anda."
+        : "Lengkapi profil agar rekomendasi lebih sesuai.",
+      highlight: !profile?.onboarding_completed,
+    },
+    {
+      href: "/saya/dokumen",
+      title: "Dokumen",
+      body: `${documents.count ?? 0} dokumen tercatat sudah dimiliki.`,
+      highlight: false,
+    },
+    {
+      href: "/saya/rencana",
+      title: "Rencana",
+      body: `${plan.count ?? 0} peluang tersimpan di rencana Anda.`,
+      highlight: false,
+    },
+  ];
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
@@ -41,21 +75,30 @@ export default async function SayaPage() {
         {user.isAdmin ? " · Admin" : ""}
       </p>
 
-      <section className="mt-8 rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-        <h2 className="font-medium">Ruang personal Anda segera hadir</h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Profil, dokumen, rencana, dan timeline akan tersedia di sini. Untuk
-          saat ini akun Anda sudah aktif.
-        </p>
-        {user.isAdmin && (
-          <Link
-            href="/admin"
-            className="mt-4 inline-block text-sm font-medium underline underline-offset-4"
-          >
-            Buka panel admin
-          </Link>
-        )}
-      </section>
+      <ul className="mt-8 grid gap-4 sm:grid-cols-3">
+        {cards.map((card) => (
+          <li key={card.href}>
+            <Link
+              href={card.href}
+              className={`block h-full rounded-xl border p-5 transition hover:border-zinc-400 dark:hover:border-zinc-600 ${card.highlight ? "border-emerald-400 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950" : "border-zinc-200 dark:border-zinc-800"}`}
+            >
+              <h2 className="font-medium">{card.title}</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                {card.body}
+              </p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      {user.isAdmin && (
+        <Link
+          href="/admin"
+          className="mt-8 inline-block text-sm font-medium underline underline-offset-4"
+        >
+          Buka panel admin
+        </Link>
+      )}
     </main>
   );
 }

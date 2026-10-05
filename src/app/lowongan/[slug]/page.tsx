@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { AddToPlanButton } from "@/components/add-to-plan";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
 import { readAttributes, signalLabels } from "@/lib/attributes";
@@ -36,6 +37,8 @@ export default async function LowonganDetailPage({
   const { slug } = await params;
   const job = await loadOpportunity(slug);
   if (!job) notFound();
+  // Beasiswa punya halaman detail sendiri; jangan tampilkan dengan tata letak lowongan.
+  if (job.kind === "scholarship") redirect(`/beasiswa/${job.slug}`);
 
   const supabase = createPublicClient();
   const [sources, changes] = await Promise.all([
@@ -150,6 +153,13 @@ export default async function LowonganDetailPage({
             lowongan masih dibuka di situs sumber.
           </p>
         )}
+      </div>
+
+      <div className="mt-4">
+        <AddToPlanButton
+          opportunityId={job.id}
+          returnTo={`/lowongan/${job.slug}`}
+        />
       </div>
 
       <section className="mt-10 border-t border-zinc-200 pt-6 text-sm dark:border-zinc-800">

@@ -47,6 +47,7 @@ export default async function LowonganPage({
       "slug, title, city, region, country_code, is_remote, employment_type, kind, status, verification_status, last_verified_at, closes_at, attributes, organizations(name)",
       { count: "exact" },
     )
+    .in("kind", ["job", "program"]) // beasiswa punya halaman sendiri di /beasiswa
     .in("status", ["open", "upcoming"])
     .order("last_verified_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);

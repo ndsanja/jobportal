@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import type { Database } from "./database.types";
 import { supabasePublishableKey, supabaseUrl } from "./env";
 
-const PROTECTED_PREFIXES = ["/saya", "/admin"];
+const PROTECTED_PREFIXES = ["/saya", "/admin", "/onboarding"];
 
 /**
  * Menyegarkan sesi Supabase pada setiap request dan melakukan pengecekan optimistik:

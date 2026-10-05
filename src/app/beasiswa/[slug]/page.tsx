@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AddToPlanButton } from "@/components/add-to-plan";
 import { SiteHeader } from "@/components/site-header";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
@@ -166,6 +167,10 @@ export default async function BeasiswaDetailPage({
           >
             Daftar / info resmi ↗
           </a>
+          <AddToPlanButton
+            opportunityId={item.id}
+            returnTo={`/beasiswa/${item.slug}`}
+          />
           {item.official_url && item.official_url !== item.apply_url && (
             <a
               href={item.official_url}

@@ -515,6 +515,47 @@ export type Database = {
           },
         ];
       };
+      plan_items: {
+        Row: {
+          created_at: string;
+          id: string;
+          notes: string | null;
+          opportunity_id: string;
+          pinned: boolean;
+          stage: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          notes?: string | null;
+          opportunity_id: string;
+          pinned?: boolean;
+          stage?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          notes?: string | null;
+          opportunity_id?: string;
+          pinned?: boolean;
+          stage?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "plan_items_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           birth_date: string | null;
@@ -707,6 +748,50 @@ export type Database = {
           sort_order?: number;
         };
         Relationships: [];
+      };
+      user_documents: {
+        Row: {
+          created_at: string;
+          document_type: string;
+          expires_on: string | null;
+          id: string;
+          issued_on: string | null;
+          notes: string | null;
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          document_type: string;
+          expires_on?: string | null;
+          id?: string;
+          issued_on?: string | null;
+          notes?: string | null;
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          document_type?: string;
+          expires_on?: string | null;
+          id?: string;
+          issued_on?: string | null;
+          notes?: string | null;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_documents_document_type_fkey";
+            columns: ["document_type"];
+            isOneToOne: false;
+            referencedRelation: "document_types";
+            referencedColumns: ["code"];
+          },
+        ];
       };
     };
     Views: {

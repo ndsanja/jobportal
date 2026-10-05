@@ -4,6 +4,8 @@ export type OpportunityAttributes = {
   whv_signal?: "explicit" | "likely" | "unsuitable" | "unknown";
   sponsorship?: "available" | "none" | "unknown";
   dama_mentioned?: boolean;
+  /** Perusahaan tercatat punya perjanjian DAMA (dama_employers terverifikasi). */
+  dama_employer?: boolean;
   attribution?: string | null;
   /** Hasil riset otomatis (lihat src/server/research/opportunities.ts). */
   research?: {
@@ -27,6 +29,7 @@ export function signalLabels(attributes: OpportunityAttributes): string[] {
   else if (attributes.whv_signal === "likely")
     labels.push("Kemungkinan cocok WHV");
   if (attributes.dama_mentioned) labels.push("Menyebut DAMA");
+  if (attributes.dama_employer) labels.push("Pemberi kerja DAMA");
   if (attributes.sponsorship === "available")
     labels.push("Sponsor visa disebut");
   return labels;

@@ -210,6 +210,54 @@ export type Database = {
         };
         Relationships: [];
       };
+      dama_employers: {
+        Row: {
+          careers_url: string | null;
+          evidence: Json;
+          first_seen_at: string;
+          id: string;
+          industry: string | null;
+          is_published: boolean;
+          last_seen_at: string;
+          name: string;
+          name_key: string;
+          region: string | null;
+          source_id: string | null;
+          verified: boolean;
+          website: string | null;
+        };
+        Insert: {
+          careers_url?: string | null;
+          evidence?: Json;
+          first_seen_at?: string;
+          id?: string;
+          industry?: string | null;
+          is_published?: boolean;
+          last_seen_at?: string;
+          name: string;
+          name_key: string;
+          region?: string | null;
+          source_id?: string | null;
+          verified?: boolean;
+          website?: string | null;
+        };
+        Update: {
+          careers_url?: string | null;
+          evidence?: Json;
+          first_seen_at?: string;
+          id?: string;
+          industry?: string | null;
+          is_published?: boolean;
+          last_seen_at?: string;
+          name?: string;
+          name_key?: string;
+          region?: string | null;
+          source_id?: string | null;
+          verified?: boolean;
+          website?: string | null;
+        };
+        Relationships: [];
+      };
       discovery_candidates: {
         Row: {
           country_code: string | null;

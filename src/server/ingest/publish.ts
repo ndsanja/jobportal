@@ -78,6 +78,7 @@ type Prepared = {
 function prepare(
   source: IngestSource,
   items: NormalizedOpportunity[],
+  damaEmployers: ReadonlySet<string> = new Set(),
 ): Prepared[] {
   const groups = new Map<string, Prepared>();
 
@@ -91,12 +92,20 @@ function prepare(
       continue;
     }
     const signals = detectSignals(item);
+    // Pemberi kerja yang terverifikasi punya perjanjian DAMA (lihat dama_employers).
+    const damaEmployer =
+      item.countryCode === "AU" &&
+      damaEmployers.has(normalizeOrgName(item.organizationName));
+    const tracks = deriveTracks(source.tracks, item.countryCode, signals);
     groups.set(key, {
       key,
       item,
       externals: [item],
-      tracks: deriveTracks(source.tracks, item.countryCode, signals),
+      tracks: damaEmployer
+        ? [...new Set([...tracks, "dama_au" as const])]
+        : tracks,
       attributes: {
+        ...(damaEmployer ? { dama_employer: true } : {}),
         ...signals,
         dedupe_basis: basis,
         source_slug: source.slug,
@@ -157,7 +166,15 @@ export async function publishItems(
 ): Promise<PublishStats> {
   const { dryRun, now } = options;
   const nowIso = now.toISOString();
-  const prepared = prepare(source, result.items);
+  const { data: damaRows } = await db
+    .from("dama_employers")
+    .select("name_key")
+    .eq("verified", true);
+  const prepared = prepare(
+    source,
+    result.items,
+    new Set((damaRows ?? []).map((r) => r.name_key)),
+  );
 
   const stats: PublishStats = {
     fetched: result.items.length,

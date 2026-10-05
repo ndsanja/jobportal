@@ -88,6 +88,16 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     closed_refresh_days: z.number().int().min(1).max(180).default(30),
   }),
   z.object({
+    /** Agen daftar perusahaan DAMA: mencari daftar pemberi kerja berperjanjian DAMA. */
+    provider: z.literal("employer_registry"),
+    group: z.string().default("discovery"),
+    queries: z.array(z.string().min(5).max(200)).min(1).max(40),
+    queries_per_run: z.number().int().min(1).max(12).default(5),
+    results_per_query: z.number().int().min(1).max(10).default(6),
+    max_pages: z.number().int().min(1).max(15).default(8),
+    max_chars: z.number().int().min(5000).max(120000).default(60000),
+  }),
+  z.object({
     /** Agen penemu career page: mencari board ATS publik perusahaan dan mendaftarkannya sebagai sumber. */
     provider: z.literal("ats_discovery"),
     group: z.string().default("discovery"),

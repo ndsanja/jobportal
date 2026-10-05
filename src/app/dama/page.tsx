@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DamaEmployersPanel } from "@/components/dama-employers";
 import { TrackGuide } from "@/components/track-guide";
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function DamaPage() {
       intro="Jalur visa kerja berbasis sponsor pemberi kerja di wilayah tertentu Australia. Setiap butir dikumpulkan mesin riset kami dari halaman resmi dan sumber lain, disertai kutipan bukti dan tingkat keyakinan. Tetap cek halaman resmi Home Affairs dan otoritas wilayah DAMA sebelum melamar."
       jobsHref="/lowongan?track=dama_au"
       jobsLabel="Lihat lowongan DAMA"
+      extra={<DamaEmployersPanel />}
     />
   );
 }

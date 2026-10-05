@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { BriefPanel } from "@/components/brief-panel";
 import { ClaimsPanel } from "@/components/claims-panel";
 import { QualityBadge } from "@/components/quality-badge";
@@ -22,6 +23,8 @@ type Props = {
   path: string;
   jobsHref: string;
   jobsLabel: string;
+  /** Konten tambahan setelah panduan (mis. daftar perusahaan DAMA). */
+  extra?: ReactNode;
 };
 
 /** Halaman panduan jalur (WHV/DAMA): panduan AI, kesiapan pengguna, dan rincian klaim berbukti. */
@@ -32,6 +35,7 @@ export async function TrackGuide({
   path,
   jobsHref,
   jobsLabel,
+  extra,
 }: Props) {
   const [claims, brief] = await Promise.all([
     loadClaims({ track }),
@@ -138,6 +142,8 @@ export async function TrackGuide({
             <BriefPanel brief={brief} claims={claims} />
           </div>
         )}
+
+        {extra}
 
         <div className="mt-10">
           <h2 className="text-base font-semibold">Rincian syarat & bukti</h2>

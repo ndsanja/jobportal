@@ -264,7 +264,7 @@ Firecrawl (API scraping: `scrape`, `map`, `crawl`, `extract`) **membantu**, tapi
 2. **Cari jalur terstruktur** (urut): API resmi → ATS publik → file CSV/XLSX/PDF → JSON-LD → sitemap/RSS → HTML (`fetch`; pakai Firecrawl hanya jika halaman dirender JavaScript atau berupa PDF sulit).
 3. **Daftarkan di `sources`:** `kind`, `authority`, `trust_score`, `config` (endpoint/slug/selector), jadwal, catatan atribusi.
 4. **Simpan fixture** (contoh respons) di `ingest/__fixtures__/` dan tulis test adapter.
-5. **Uji kering:** `POST /api/ingest/<slug>?dry_run=1` (khusus admin) → cek hasil normalisasi.
+5. **Uji kering:** `POST /api/ingest/run?slug=<slug>&dry_run=1` (Bearer `CRON_SECRET`; lihat `docs/INGESTION.md`) → cek hasil normalisasi.
 6. **Aktifkan** → pantau 1 minggu di dashboard admin (jumlah item, error, confidence).
 
 ---

@@ -190,7 +190,7 @@ Instagram, Telegram, TikTok, Reddit, grup WA, dan kiriman user masuk ke **tip in
 jobportal/
 ├─ src/
 │  ├─ app/              # halaman (lihat §8) + route API:
-│  │                    #   api/ingest/run, api/ingest/[slug] (admin/dry-run), api/notify/run
+│  │                    #   api/ingest/run (?group= | ?slug=&dry_run=1), api/notify/run
 │  ├─ components/       # UI (shadcn/ui)
 │  ├─ features/         # explore, profile, vault, plan, timeline, admin
 │  ├─ domain/           # TS murni, dipakai halaman & route API: tipe, skema Zod,

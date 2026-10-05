@@ -2,27 +2,78 @@ import { BRIEF_SECTIONS } from "@/domain/brief";
 import type { PublicBrief, PublicClaim } from "@/lib/claims-query";
 import { formatDate } from "@/lib/format";
 
+const TIER_LABEL: Record<string, string> = {
+  official: "Resmi",
+  reputable: "Tepercaya",
+  community: "Komunitas",
+};
 const TIER_RANK: Record<string, number> = {
   official: 0,
   reputable: 1,
   community: 2,
 };
 
-/** Sumber di balik satu butir: tingkat terbaik + domain, dihitung dari klaim yang dirujuk. */
+type SourceLink = {
+  url: string;
+  domain: string;
+  tier: string;
+  pageDate: string | null;
+};
+
+/** Sumber di balik satu butir: URL halaman unik (resmi dulu) dari klaim yang dirujuk. */
 function sourcesOf(ids: string[], byId: Map<string, PublicClaim>) {
   const claims = ids.flatMap((id) => {
     const claim = byId.get(id);
     return claim ? [claim] : [];
   });
-  const evidence = claims.flatMap((c) => c.claim_evidence);
-  const best = evidence
-    .map((e) => e.source_tier)
-    .sort((a, b) => (TIER_RANK[a] ?? 9) - (TIER_RANK[b] ?? 9))[0];
+  const links = new Map<string, SourceLink>();
+  for (const claim of claims) {
+    for (const e of claim.claim_evidence) {
+      const known = links.get(e.source_url);
+      if (
+        !known ||
+        (TIER_RANK[e.source_tier] ?? 9) < (TIER_RANK[known.tier] ?? 9)
+      )
+        links.set(e.source_url, {
+          url: e.source_url,
+          domain: e.source_domain,
+          tier: e.source_tier,
+          pageDate: e.page_date,
+        });
+    }
+  }
   return {
     official: claims.some((c) => c.status === "accepted"),
-    tier: best,
-    domains: [...new Set(evidence.map((e) => e.source_domain))].slice(0, 3),
+    links: [...links.values()].sort(
+      (a, b) => (TIER_RANK[a.tier] ?? 9) - (TIER_RANK[b.tier] ?? 9),
+    ),
   };
+}
+
+/** Alamat ringkas yang tetap terbaca: host + path tanpa skema/parameter. */
+const shortUrl = (url: string) => {
+  try {
+    const u = new URL(url);
+    const text = `${u.hostname.replace(/^www\./, "")}${u.pathname === "/" ? "" : u.pathname}`;
+    return text.length > 70 ? `${text.slice(0, 67)}…` : text;
+  } catch {
+    return url;
+  }
+};
+
+function SourceAnchor({ link }: { link: SourceLink }) {
+  return (
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noopener noreferrer nofollow"
+      title={link.url}
+      className="break-all underline underline-offset-4 hover:text-zinc-900 dark:hover:text-zinc-100"
+    >
+      {shortUrl(link.url)}
+      <span aria-hidden> ↗</span>
+    </a>
+  );
 }
 
 function Sources({
@@ -32,20 +83,64 @@ function Sources({
   ids: string[];
   byId: Map<string, PublicClaim>;
 }) {
-  const { official, domains } = sourcesOf(ids, byId);
-  return (
-    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500">
-      <span
-        className={
-          official
-            ? "rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
-            : "rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-        }
-      >
-        {official ? "Resmi" : "Belum resmi"}
-      </span>
-      {domains.join(" · ")}
+  const { official, links } = sourcesOf(ids, byId);
+  const badge = (
+    <span
+      className={
+        official
+          ? "rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
+          : "rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+      }
+    >
+      {official ? "Resmi" : "Belum resmi"}
     </span>
+  );
+
+  if (links.length === 0)
+    return <span className="mt-1 block text-xs">{badge}</span>;
+
+  if (links.length === 1) {
+    const [link] = links as [SourceLink];
+    return (
+      <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500">
+        {badge}
+        <SourceAnchor link={link} />
+        {link.pageDate && (
+          <span className="text-zinc-400">
+            diperbarui {formatDate(link.pageDate)}
+          </span>
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <details className="group mt-2 text-xs text-zinc-500">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1">
+        {badge}
+        <span className="underline underline-offset-4">
+          Cek sumber ({links.length})
+        </span>
+        <span aria-hidden className="transition group-open:rotate-90">
+          ›
+        </span>
+      </summary>
+      <ul className="mt-2 space-y-1.5 border-l-2 border-zinc-200 pl-3 dark:border-zinc-800">
+        {links.map((link) => (
+          <li key={link.url} className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-zinc-400">
+              {TIER_LABEL[link.tier] ?? link.tier}
+            </span>
+            <SourceAnchor link={link} />
+            {link.pageDate && (
+              <span className="text-zinc-400">
+                diperbarui {formatDate(link.pageDate)}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

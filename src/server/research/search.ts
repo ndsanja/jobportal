@@ -57,6 +57,24 @@ const TBS: Record<Recency, string> = {
   year: "qdr:y",
 };
 
+/** Jeda minimum antar-pencarian dalam satu proses (menghindari batas kecepatan Firecrawl). */
+const MIN_GAP_MS = 1_200;
+let chain: Promise<void> = Promise.resolve();
+let lastStart = 0;
+
+/** Antrekan pencarian agar tidak beruntun terlalu cepat walau dipanggil paralel. */
+function throttle(): Promise<void> {
+  const next = chain.then(async () => {
+    const wait = lastStart + MIN_GAP_MS - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastStart = Date.now();
+  });
+  chain = next.catch(() => undefined);
+  return next;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export async function searchWeb(
   query: string,
   options: {
@@ -65,21 +83,43 @@ export async function searchWeb(
     fetch: FetchLike;
     /** Batasi hasil ke periode terakhir (berguna untuk berita/pengumuman terbaru). */
     recency?: Recency;
+    /** Untuk uji: tanpa antre/jeda. */
+    noThrottle?: boolean;
   },
 ): Promise<SearchResult[]> {
-  const response = await options.fetch("https://api.firecrawl.dev/v1/search", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${options.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query,
-      limit: options.limit,
-      ...(options.recency ? { tbs: TBS[options.recency] } : {}),
-    }),
-    signal: AbortSignal.timeout(45_000),
-  });
-  if (!response.ok) throw new Error(`Pencarian gagal: HTTP ${response.status}`);
-  return parseSearchResponse(await response.json());
+  for (let attempt = 0; ; attempt += 1) {
+    if (!options.noThrottle) await throttle();
+    const response = await options.fetch(
+      "https://api.firecrawl.dev/v1/search",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${options.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query,
+          limit: options.limit,
+          ...(options.recency ? { tbs: TBS[options.recency] } : {}),
+        }),
+        signal: AbortSignal.timeout(45_000),
+      },
+    );
+    // Batas kecepatan: tunggu sesuai Retry-After (maks. 20 dtk) lalu coba lagi, paling banyak 3 kali.
+    if (response.status === 429 && attempt < 3 && !options.noThrottle) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      await sleep(
+        Math.min(
+          20_000,
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? retryAfter * 1000
+            : 3_000 * 2 ** attempt,
+        ),
+      );
+      continue;
+    }
+    if (!response.ok)
+      throw new Error(`Pencarian gagal: HTTP ${response.status}`);
+    return parseSearchResponse(await response.json());
+  }
 }

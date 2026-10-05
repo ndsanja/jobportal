@@ -5,6 +5,7 @@ import { classifyTier } from "@/domain/claims";
 import {
   type DamaEmployerCandidate,
   isVerifiedEmployer,
+  pickFollowLinks,
   validateDamaEmployers,
 } from "@/domain/dama-employers";
 import { type PageLink, pickQueries } from "@/domain/discovery";
@@ -32,6 +33,7 @@ export type DamaEmployerStats = {
   queries: string[];
   pagesRead: number;
   pagesFailed: number;
+  followed?: number;
   employersFound: number;
   rejected: number;
   created: number;
@@ -189,8 +191,14 @@ export async function runDamaEmployerDiscovery(
     string,
     DamaEmployerCandidate & { evidence_list: Evidence[] }
   >();
-  const pages = urls.slice(0, config.max_pages);
-  const queue = [...pages];
+  // Halaman resmi wilayah DAMA dibaca dulu; tautan pemberi kerja/sponsor di dalamnya diikuti sekali.
+  const seeds = new Set(config.seed_urls);
+  const queue = [
+    ...config.seed_urls,
+    ...urls.filter((u) => !seeds.has(u)).slice(0, config.max_pages),
+  ];
+  const seen = new Set(queue);
+  let followed = 0;
   const worker = async () => {
     for (;;) {
       if (Date.now() > options.deadlineMs - 40_000) {
@@ -205,6 +213,15 @@ export async function runDamaEmployerDiscovery(
           firecrawlKey,
           maxChars: config.max_chars,
         });
+        if (seeds.has(url)) {
+          for (const next of pickFollowLinks(page.links, url, 4)) {
+            if (followed >= 10 || seen.has(next)) continue;
+            seen.add(next);
+            followed += 1;
+            // Disisipkan di depan agar halaman resmi lanjutan dibaca sebelum hasil pencarian.
+            queue.splice(config.seed_urls.length, 0, next);
+          }
+        }
         const result = await extractEmployers(page, {
           apiKey,
           model,
@@ -245,7 +262,8 @@ export async function runDamaEmployerDiscovery(
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(4, pages.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+  stats.followed = followed;
   stats.employersFound = found.size;
 
   if (options.dryRun) {

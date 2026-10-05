@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isVerifiedEmployer, validateDamaEmployers } from "./dama-employers";
+import {
+  isVerifiedEmployer,
+  pickFollowLinks,
+  validateDamaEmployers,
+} from "./dama-employers";
 
 const page = {
   text: "Businesses with a DAMA labour agreement in the Great South Coast include Midfield Meat International and Warrnambool Cheese & Butter. Other news: Acme Bakery opened a new store.",
@@ -72,5 +76,28 @@ describe("isVerifiedEmployer", () => {
         { url: "https://b.com/y", tier: "community" },
       ]),
     ).toBe(true);
+  });
+});
+
+describe("pickFollowLinks", () => {
+  it("mengikuti tautan pemberi kerja/sponsor di domain yang sama saja", () => {
+    const links = [
+      {
+        text: "DAMA endorsed employers",
+        url: "https://dama.example.gov.au/employers#top",
+      },
+      { text: "Privacy", url: "https://dama.example.gov.au/privacy" },
+      { text: "Become a sponsor", url: "https://other.com/sponsors" },
+      {
+        text: "Read more",
+        url: "https://dama.example.gov.au/business-case-studies",
+      },
+      { text: "Guide", url: "https://dama.example.gov.au/guide.pdf" },
+      { text: "Home", url: "https://dama.example.gov.au/" },
+    ];
+    expect(pickFollowLinks(links, "https://dama.example.gov.au/", 5)).toEqual([
+      "https://dama.example.gov.au/employers",
+      "https://dama.example.gov.au/business-case-studies",
+    ]);
   });
 });

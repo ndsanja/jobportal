@@ -96,3 +96,40 @@ export const isVerifiedEmployer = (
   );
   return domains.size >= 2;
 };
+
+const FOLLOW =
+  /\b(employers?|business(es)?|sponsors?|endorsed|participating|labour agreement|jobs?|vacanc(y|ies)|case stud(y|ies)|success stor(y|ies))\b/i;
+const SKIP_FOLLOW =
+  /\b(privacy|contact|login|sign in|subscribe|media|news|accessibility|terms|cookie)\b|\.(pdf|docx?|xlsx?)(\?|$)/i;
+
+/** Tautan dari halaman resmi DAMA yang layak diikuti satu kali (daftar pemberi kerja/sponsor/lowongan). */
+export function pickFollowLinks(
+  links: PageLink[],
+  seedUrl: string,
+  max: number,
+): string[] {
+  let seedHost: string;
+  try {
+    seedHost = new URL(seedUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return [];
+  }
+  const seedPath = seedUrl.split("#")[0];
+  const out: string[] = [];
+  for (const link of links) {
+    if (out.length >= max) break;
+    let url: URL;
+    try {
+      url = new URL(link.url);
+    } catch {
+      continue;
+    }
+    const clean = `${url.origin}${url.pathname}`;
+    if (url.hostname.replace(/^www\./, "") !== seedHost) continue;
+    if (clean === seedPath || out.includes(clean)) continue;
+    const label = `${link.text} ${url.pathname.replace(/[-_/]/g, " ")}`;
+    if (!FOLLOW.test(label) || SKIP_FOLLOW.test(label)) continue;
+    out.push(clean);
+  }
+  return out;
+}

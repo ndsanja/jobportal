@@ -145,6 +145,11 @@ $$);
 ```
 Satu pemanggilan memproses sumber jatuh tempo sampai batas waktu (240 detik); sisanya diambil pemanggilan berikutnya. Arsitektur & pengaman akurasi: [`ENGINE.md`](./ENGINE.md).
 
+## 11. Penemu career page (`ats_discovery`) dan sumber lowongan tambahan
+- `discover-ats-au` (harian, grup `discovery`) mencari board ATS publik (Greenhouse, Lever, Ashby, SmartRecruiters) perusahaan di Australia, dengan fokus wilayah DAMA. Board baru diuji lewat API publiknya: aktif bila ≥50% lowongannya di Australia; draft bila board global; ditolak bila tanpa lowongan Australia. Deskripsi ATS lengkap, jadi label DAMA/sponsor lebih tajam daripada cuplikan Adzuna.
+- Sumber Adzuna tambahan: `adzuna-au-dama` (DAMA/482/494) dan `adzuna-{nz,gb,ca,de,nl,sg}-sponsor` (lowongan bersponsor visa, jalur "Luar negeri"). Jalur DAMA tetap hanya diberikan bila iklan menyebut DAMA secara eksplisit.
+- Tautan klik Adzuna (`redirect_url`) tidak diambil otomatis: membukanya akan memalsukan klik pada pelacakan Adzuna.
+
 ## Pengaman bawaan
 - Endpoint hanya menerima `POST` + Bearer `CRON_SECRET` (503 bila secret belum diatur — tidak pernah terbuka).
 - Lowongan hilang dari feed ATS → ditutup, **kecuali** >50% hilang sekaligus (dianggap feed parsial; `closeSkipped: true`).

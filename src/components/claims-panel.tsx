@@ -51,11 +51,12 @@ function Evidence({ claim }: { claim: PublicClaim }) {
             >
               {e.source_domain}
             </a>
-            {e.page_date && (
-              <span className="ml-2 text-zinc-400">
-                halaman diperbarui {formatDate(e.page_date)}
-              </span>
-            )}
+            <span className="ml-2 text-zinc-400">
+              {e.page_date
+                ? `halaman diperbarui ${formatDate(e.page_date)}`
+                : "tanggal pembaruan tidak tercantum"}{" "}
+              · dicek {formatDate(e.retrieved_at)}
+            </span>
             <blockquote className="mt-1 border-l-2 border-zinc-300 pl-3 italic text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
               “{e.quote}”
             </blockquote>

@@ -1,3 +1,4 @@
+import { findHtmlMetaDate } from "@/domain/page-date";
 import { htmlToText } from "@/domain/text";
 import type { FetchLike } from "./types";
 
@@ -20,6 +21,7 @@ export async function fetchPageText(
 ): Promise<PageText> {
   const host = new URL(url).host;
   let text: string;
+  let metaDate: string | null = null;
 
   if (options.fetcher === "firecrawl") {
     if (!options.firecrawlKey)
@@ -44,11 +46,22 @@ export async function fetchPageText(
       throw new Error(`Firecrawl gagal untuk ${host}: HTTP ${response.status}`);
     const body = (await response.json()) as {
       success?: boolean;
-      data?: { markdown?: string };
+      data?: {
+        markdown?: string;
+        metadata?: Record<string, unknown>;
+      };
     };
     if (!body.success || !body.data?.markdown)
       throw new Error(`Firecrawl tidak mengembalikan konten untuk ${host}`);
     text = body.data.markdown;
+    const meta = body.data.metadata ?? {};
+    const raw = [
+      meta.modifiedTime,
+      meta["article:modified_time"],
+      meta["og:updated_time"],
+      meta.dateModified,
+    ].find((v): v is string => typeof v === "string");
+    metaDate = raw && /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : null;
   } else {
     const response = await options.fetch(url, {
       headers: { Accept: HTML_ACCEPT },
@@ -60,13 +73,17 @@ export async function fetchPageText(
       throw new Error(
         `${host} mengembalikan PDF; gunakan fetcher "firecrawl".`,
       );
-    text = htmlToText(await response.text());
+    const html = await response.text();
+    metaDate = findHtmlMetaDate(html);
+    text = htmlToText(html);
   }
 
   text = text
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+  // Metadata tanggal (tidak ikut dalam teks hasil konversi) ditaruh di awal agar bisa dikutip sebagai bukti.
+  if (metaDate) text = `Page last modified (metadata): ${metaDate}\n\n${text}`;
   if (text.length < 200)
     throw new Error(
       `Konten ${host} terlalu pendek (${text.length} karakter); mungkin dirender JavaScript.`,

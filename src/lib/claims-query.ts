@@ -15,11 +15,12 @@ export type PublicClaim = {
     source_tier: string;
     quote: string;
     page_date: string | null;
+    retrieved_at: string;
   }>;
 };
 
 const SELECT =
-  "id, field, value, summary, status, confidence, last_verified_at, claim_evidence(source_url, source_domain, source_tier, quote, page_date)";
+  "id, field, value, summary, status, confidence, last_verified_at, claim_evidence(source_url, source_domain, source_tier, quote, page_date, retrieved_at)";
 
 /** Klaim yang boleh dilihat publik (accepted + disputed; RLS menegakkan hal yang sama). */
 export async function loadClaims(

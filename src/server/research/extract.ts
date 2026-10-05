@@ -5,6 +5,7 @@ import {
   parseClaimValue,
 } from "@/domain/claims";
 import { DOCUMENT_TYPE_CODES } from "@/domain/documents";
+import { findPageDate } from "@/domain/page-date";
 import {
   evidenceInText,
   type Rejection,
@@ -109,6 +110,8 @@ export function parsePageMeta(
     if (!Number.isNaN(time) && time <= now.getTime())
       lastUpdated = raw.last_updated;
   }
+  // Tanggal yang ditemukan secara deterministik di teks lebih dipercaya daripada keluaran model.
+  lastUpdated = findPageDate(pageText, now) ?? lastUpdated;
   return {
     aboutSubject: raw.about_subject !== false,
     indonesia,

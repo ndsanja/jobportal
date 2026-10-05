@@ -18,6 +18,7 @@ type SourceLink = {
   domain: string;
   tier: string;
   pageDate: string | null;
+  retrievedAt: string;
 };
 
 /** Sumber di balik satu butir: URL halaman unik (resmi dulu) dari klaim yang dirujuk. */
@@ -39,6 +40,7 @@ function sourcesOf(ids: string[], byId: Map<string, PublicClaim>) {
           domain: e.source_domain,
           tier: e.source_tier,
           pageDate: e.page_date,
+          retrievedAt: e.retrieved_at,
         });
     }
   }
@@ -60,6 +62,18 @@ const shortUrl = (url: string) => {
     return url;
   }
 };
+
+/** Usia sumber: tanggal pembaruan halaman (bila tercantum) dan kapan mesin kami terakhir membacanya. */
+function SourceDates({ link }: { link: SourceLink }) {
+  return (
+    <span className="text-zinc-400">
+      {link.pageDate
+        ? `halaman diperbarui ${formatDate(link.pageDate)}`
+        : "tanggal pembaruan tidak tercantum"}{" "}
+      · dicek {formatDate(link.retrievedAt)}
+    </span>
+  );
+}
 
 function SourceAnchor({ link }: { link: SourceLink }) {
   return (
@@ -105,11 +119,7 @@ function Sources({
       <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500">
         {badge}
         <SourceAnchor link={link} />
-        {link.pageDate && (
-          <span className="text-zinc-400">
-            diperbarui {formatDate(link.pageDate)}
-          </span>
-        )}
+        <SourceDates link={link} />
       </span>
     );
   }
@@ -132,11 +142,7 @@ function Sources({
               {TIER_LABEL[link.tier] ?? link.tier}
             </span>
             <SourceAnchor link={link} />
-            {link.pageDate && (
-              <span className="text-zinc-400">
-                diperbarui {formatDate(link.pageDate)}
-              </span>
-            )}
+            <SourceDates link={link} />
           </li>
         ))}
       </ul>

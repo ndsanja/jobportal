@@ -142,7 +142,7 @@ Pencocokan nama perusahaan: normalisasi (huruf kecil, buang "Ltd/Pty/GmbH/B.V.")
 | Program | Halaman resmi yang dipantau | Bentuk data |
 |---|---|---|
 | LPDP | lpdp.kemenkeu.go.id — jadwal, booklet/buku panduan (PDF), daftar PT tujuan | HTML + PDF |
-| Australia Awards | australiaawardsindo.or.id — intake, policy handbook | HTML + PDF |
+| Australia Awards | australiaawardsindonesia.org — intake, policy handbook | HTML + PDF |
 | Erasmus Mundus | Katalog Erasmus Mundus (Erasmus+/EACEA) → **website tiap program** | HTML, ratusan halaman |
 | DAAD | daad.de scholarship database + daad.id | HTML |
 | Chevening | chevening.org (timeline, eligibility) | HTML |

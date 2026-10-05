@@ -22,6 +22,13 @@ values (
 ```
 `provider`: `greenhouse` | `lever` | `ashby` (ATS, feed lengkap → lowongan yang hilang ditutup otomatis) | `adzuna` (agregator, tidak menutup otomatis). Sumber baru dibuat `draft`; ubah ke `active` setelah dry-run bersih.
 
+## 2b. Sumber bawaan yang sudah ada (status draft sampai diuji)
+- 10 career page (Greenhouse, Lever, SmartRecruiters) dan 10 pemantau halaman beasiswa (`page-*`). Uji semuanya sekaligus:
+```bash
+curl -s -X POST "https://<domain>/api/ingest/run?drafts=1&dry_run=1" -H "Authorization: Bearer $CRON_SECRET"
+```
+  Mode ini hanya untuk sumber `draft` dan wajib `dry_run=1`. Bila `deferred` > 0 (waktu habis), uji sisanya satu per satu dengan `?slug=`. Sumber yang bersih diaktifkan dengan `update public.sources set status='active' where slug='...'`.
+
 ## 3. Uji kering satu sumber (tanpa menulis apa pun)
 ```bash
 curl -s -X POST "https://<domain>/api/ingest/run?slug=<slug-sumber>&dry_run=1" \
@@ -49,15 +56,33 @@ $$);
 ```
 `pg_net` berjalan asinkron; hasil permintaan ada di `net._http_response`. Penutupan otomatis lewat deadline (`close-expired-opportunities`) **sudah terjadwal** di database.
 
+## 5. Pemantau halaman beasiswa & antrean review
+Sumber `kind = 'monitor'` (config `provider: page_monitor`) mengambil satu halaman resmi (`fetcher`: `fetch` atau `firecrawl` untuk halaman JavaScript/PDF), menghitung hash teks, dan **hanya jika berubah** memanggil model (`OPENROUTER_MODEL`, default `deepseek/deepseek-v4.1-flash`). Setiap fakta (tanggal, pendanaan, jenjang, status) wajib membawa kutipan persis dari halaman; kutipan yang tidak ada di teks atau tanggal yang tidak wajar dibuang otomatis. Hasilnya masuk **`/admin/review`**: admin mencocokkan kutipan, lalu *Setujui & terapkan* (memperbarui peluang, mengganti jadwal dari halaman itu, mencatat `opportunity_changes`, dan menandai terverifikasi) atau *Tolak*. Tidak ada yang tampil sebagai "Terverifikasi" tanpa persetujuan admin.
+
+Jadwal pemantau (pasang setelah uji kering bersih), sama seperti §4 tetapi dengan `?group=pages`:
+```sql
+select cron.schedule('monitor-pages', '30 1 * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'app_base_url') || '/api/ingest/run?group=pages',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret'), 'Content-Type', 'application/json'),
+    body := '{}'::jsonb, timeout_milliseconds := 300000);
+$$);
+```
+
 ## Pengaman bawaan
 - Endpoint hanya menerima `POST` + Bearer `CRON_SECRET` (503 bila secret belum diatur — tidak pernah terbuka).
 - Lowongan hilang dari feed ATS → ditutup, **kecuali** >50% hilang sekaligus (dianggap feed parsial; `closeSkipped: true`).
 - Feed kosong tidak pernah menutup apa pun.
 - Moderasi admin (`is_published`) dan `first_seen_at` tidak tertimpa ingestion.
 - Pesan error tidak memuat kunci API (hanya host + status HTTP).
+- Fakta hasil AI tanpa kutipan yang cocok dengan halaman tidak pernah disimpan.
+- Halaman yang tidak berubah tidak memanggil AI; "terakhir diverifikasi" hanya diperbarui bila isi halaman yang sama pernah disetujui admin.
 - Sumber gagal 3× berturut-turut → `failing` (tetap dicoba ulang dengan backoff ≥ 1 jam).
 
 ## Keterbatasan yang diketahui
+- Data awal 10 beasiswa disusun dari halaman resmi penyelenggara dan berstatus `needs_review` (badge "Menunggu verifikasi") sampai pemantau + admin memverifikasinya. Tanggal LPDP/Chevening berasal dari ringkasan halaman resmi dan belum dicocokkan langsung oleh sistem.
+- SmartRecruiters: daftar lowongan tanpa deskripsi, jadi sinyal WHV/sponsor hanya dari judul.
+- Pemantau memakai teks halaman utuh (dipotong di `max_chars`); halaman yang kontennya dinamis (jam, hitungan) bisa memicu ekstraksi berulang.
 - Pemilihan sumber utama bila satu peluang punya >1 sumber belum ada (semua `is_primary = true`).
 - Label `specified_work` (WHV) menunggu tabel postcode Home Affairs.
 - Penutupan otomatis belum mempertimbangkan peluang yang punya lebih dari satu sumber.

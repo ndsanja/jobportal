@@ -93,13 +93,65 @@ Hasil dry-run memuat `errors` (galat per tahap, mis. `ekstrak homeaffairs.gov.au
 - `?reset=1` (bukan dry-run) menghapus klaim hasil sistem subjek itu lalu membangunnya ulang; keputusan admin tidak disentuh. Pakai sekali setelah pembaruan mesin untuk membuang klaim usang lama.
 
 
+## 7. Riset otomatis semua beasiswa & program (`opportunity_research`)
+Sumber `research-opportunities` memilih peluang yang jatuh tempo (belum pernah diriset → tenggat terdekat → jadwal rutin), menyusun rencana riset otomatis (domain resmi dari URL resmi/situs penyelenggara, halaman resmi sebagai benih, kueri Inggris + Indonesia termasuk `site:` dan berita setahun terakhir), menjalankan mesin riset, lalu **menerapkan fakta resmi ke listing**: tenggat (WIB, jam pasti bila tertulis), status buka/tutup/segera, pendanaan, jenjang, status verifikasi (≥3 fakta resmi → "Terverifikasi"), dan jadwal kalender (dengan tautan sumber). Semua perubahan tercatat di `opportunity_changes`. Penyesuaian per peluang (kueri, domain resmi, benih) disimpan di `research_subjects.config`; `enabled = false` menghentikan riset untuk peluang itu.
+
+```bash
+# uji satu peluang tanpa menulis (lihat research.claims, research.guide, applied)
+curl -s -X POST "https://<domain>/api/ingest/run?slug=research-opportunities&opportunity=chevening-indonesia&dry_run=1" -H "Authorization: Bearer $CRON_SECRET"
+# jalankan sungguhan untuk satu peluang
+curl -s -X POST "https://<domain>/api/ingest/run?slug=research-opportunities&opportunity=chevening-indonesia" -H "Authorization: Bearer $CRON_SECRET"
+```
+Agen riset per-beasiswa lama (`research-chevening`, `research-lpdp`, `research-aas`, `research-gks`) dijeda karena digantikan sumber ini.
+
+## 8. Agen penemu (`discovery_agent`)
+`discover-scholarships` dan `discover-programs` mencari program BARU (kueri digilir 4 per run; `{year}`/`{next}` diganti otomatis), membaca halaman beserta tautannya, lalu AI mengusulkan kandidat yang wajib membawa kutipan dari halaman dan nomor tautan resmi dari daftar tautan halaman. Kandidat yang duplikat dengan peluang yang ada dibuang; tautan resmi dibuka dan harus menyebut nama programnya (✓). Hasil masuk **`/admin/temuan`** berurut skor: *Setujui & riset otomatis* (membuat organisasi + peluang "perlu ditinjau" dan menjadwalkan riset segera), *Duplikat*, atau *Tolak*.
+```bash
+curl -s -X POST "https://<domain>/api/ingest/run?slug=discover-scholarships&dry_run=1" -H "Authorization: Bearer $CRON_SECRET"
+```
+
+## 9. Penilaian lowongan untuk WNI (`job_enrichment`)
+Saat ingest, teks iklan disimpan privat (`opportunity_texts`, tidak pernah ditampilkan). `enrich-jobs` menilai lowongan yang baru/berubah per 8 lowongan per panggilan: peluang WNI (besar/mungkin/kecil/belum jelas), jalur visa, sponsor, syarat kunci, dan ringkasan Bahasa Indonesia. Kesimpulan tegas wajib berkutipan dari iklan; sinyal deterministik (syarat warga/PR, "no sponsorship", WHV/sponsor disebut) mengoreksi model. Hasil tampil sebagai badge + filter "Hanya yang bisa untuk WNI" di `/lowongan` dan bagian "Untuk pelamar dari Indonesia" di detail lowongan.
+```bash
+curl -s -X POST "https://<domain>/api/ingest/run?slug=enrich-jobs&dry_run=1" -H "Authorization: Bearer $CRON_SECRET"
+```
+
+## 10. Aktivasi & jadwal lengkap
+Setelah dry-run tiap sumber bersih:
+```sql
+update public.sources set status = 'active'
+where slug in ('research-whv-462', 'research-dama-au', 'research-opportunities',
+               'discover-scholarships', 'discover-programs', 'enrich-jobs');
+
+-- (vault: cron_secret & app_base_url seperti §4)
+select cron.schedule('research', '*/20 * * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'app_base_url') || '/api/ingest/run?group=research',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret'), 'Content-Type', 'application/json'),
+    body := '{}'::jsonb, timeout_milliseconds := 300000);
+$$);
+select cron.schedule('enrich-jobs', '20 * * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'app_base_url') || '/api/ingest/run?group=enrich',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret'), 'Content-Type', 'application/json'),
+    body := '{}'::jsonb, timeout_milliseconds := 300000);
+$$);
+select cron.schedule('discovery', '10 2 * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'app_base_url') || '/api/ingest/run?group=discovery',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret'), 'Content-Type', 'application/json'),
+    body := '{}'::jsonb, timeout_milliseconds := 300000);
+$$);
+```
+Satu pemanggilan memproses sumber jatuh tempo sampai batas waktu (240 detik); sisanya diambil pemanggilan berikutnya. Arsitektur & pengaman akurasi: [`ENGINE.md`](./ENGINE.md).
+
 ## Pengaman bawaan
 - Endpoint hanya menerima `POST` + Bearer `CRON_SECRET` (503 bila secret belum diatur — tidak pernah terbuka).
 - Lowongan hilang dari feed ATS → ditutup, **kecuali** >50% hilang sekaligus (dianggap feed parsial; `closeSkipped: true`).
 - Feed kosong tidak pernah menutup apa pun.
 - Moderasi admin (`is_published`) dan `first_seen_at` tidak tertimpa ingestion.
 - Pesan error tidak memuat kunci API (hanya host + status HTTP).
-- Fakta hasil AI tanpa kutipan yang cocok dengan halaman tidak pernah disimpan.
+- Fakta hasil AI tanpa kutipan yang cocok dengan halaman tidak pernah disimpan; angka & tanggal wajib tertulis di kutipannya.
 - Halaman yang tidak berubah tidak memanggil AI; "terakhir diverifikasi" hanya diperbarui bila isi halaman yang sama pernah disetujui admin.
 - Sumber gagal 3× berturut-turut → `failing` (tetap dicoba ulang dengan backoff ≥ 1 jam).
 

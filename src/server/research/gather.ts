@@ -55,6 +55,7 @@ const TIER_ORDER: Record<SourceTier, number> = {
   community: 2,
 };
 const MAX_ERRORS = 8;
+const PAGE_CONCURRENCY = 4;
 
 const sha256 = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -148,11 +149,7 @@ export async function gatherClaims(params: GatherParams): Promise<{
   const readPages: Array<{ url: string; hash: string }> = [];
   const unchangedUrls: string[] = [];
 
-  for (const page of pages) {
-    if (clock() > params.deadlineMs) {
-      stats.partial = true;
-      break;
-    }
+  const processPage = async (page: (typeof pages)[number]) => {
     const host = domainOf(page.url);
 
     let text: string;
@@ -161,14 +158,14 @@ export async function gatherClaims(params: GatherParams): Promise<{
     } catch (error) {
       stats.pagesFailed += 1;
       note(`baca ${host}: ${describeError(error)}`);
-      continue;
+      return;
     }
 
     const hash = sha256(normalizeForMatch(text));
     if (known.get(page.url) === hash) {
       stats.pagesUnchanged += 1;
       unchangedUrls.push(page.url);
-      continue;
+      return;
     }
 
     let extraction: ClaimExtraction;
@@ -177,12 +174,12 @@ export async function gatherClaims(params: GatherParams): Promise<{
     } catch (error) {
       stats.pagesFailed += 1;
       note(`ekstrak ${host}: ${describeError(error)}`);
-      continue;
+      return;
     }
     if (!extraction.ok) {
       stats.pagesFailed += 1;
       note(`ekstrak ${host}: ${extraction.error}`);
-      continue;
+      return;
     }
 
     stats.pagesRead += 1;
@@ -202,7 +199,28 @@ export async function gatherClaims(params: GatherParams): Promise<{
         pageHash: hash,
       });
     }
-  }
+  };
+
+  // Halaman diproses paralel (kolam pekerja) karena ekstraksi LLM adalah tahap paling lambat.
+  const queue = [...pages];
+  const worker = async () => {
+    for (;;) {
+      if (clock() > params.deadlineMs) {
+        if (queue.length > 0) stats.partial = true;
+        return;
+      }
+      const page = queue.shift();
+      if (!page) return;
+      await processPage(page);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(PAGE_CONCURRENCY, pages.length) }, worker),
+  );
+
+  // Urutan hasil deterministik: resmi dulu, sama seperti urutan halaman.
+  const rank = new Map(pages.map((page, index) => [page.url, index]));
+  collected.sort((a, b) => (rank.get(a.url) ?? 0) - (rank.get(b.url) ?? 0));
 
   return { collected, readPages, unchangedUrls, stats };
 }

@@ -24,6 +24,20 @@ const row = (
 });
 
 describe("decideSubject", () => {
+  it("bidang jamak: tiap butir resmi diterima, tidak saling bersaing", () => {
+    const official = [ev("immi.homeaffairs.gov.au", "official")];
+    const updates = decideSubject([
+      row("1", "requirement.other", "ballot", official),
+      row("2", "requirement.other", "biaya", official),
+      row("3", "requirement.other", "tanggungan", official),
+    ]);
+    expect(updates.map((u) => u.status)).toEqual([
+      "accepted",
+      "accepted",
+      "accepted",
+    ]);
+  });
+
   it("memutuskan tiap bidang secara terpisah", () => {
     const updates = decideSubject([
       row("1", "requirement.age", "18-30", [

@@ -13,6 +13,12 @@ export type SubjectClaimRow = {
   evidence: ClaimEvidence[];
 };
 
+/** Bidang yang bernilai jamak: tiap butir berdiri sendiri, bukan saling bersaing. */
+const MULTI_VALUED_FIELDS = new Set([
+  "requirement.other",
+  "requirement.document",
+]);
+
 export type ClaimUpdate = {
   id: string;
   status: ClaimStatus;
@@ -38,10 +44,13 @@ export function decideSubject(rows: SubjectClaimRow[]): ClaimUpdate[] {
     const locked = live.find(
       (row) => row.decided_by === "admin" && row.status === "accepted",
     );
-    const decisions = decideClaims(
-      live.map((row) => ({ key: row.value_key, evidence: row.evidence })),
-      locked?.value_key,
-    );
+    const candidates = live.map((row) => ({
+      key: row.value_key,
+      evidence: row.evidence,
+    }));
+    const decisions = MULTI_VALUED_FIELDS.has(group[0]?.field ?? "")
+      ? candidates.flatMap((candidate) => decideClaims([candidate]))
+      : decideClaims(candidates, locked?.value_key);
 
     for (const decision of decisions) {
       const row = live.find((r) => r.value_key === decision.key);

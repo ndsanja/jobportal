@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CLAIM_FIELD_NAMES, type ClaimField } from "@/domain/claims";
 
 const countryCode = z
   .string()
@@ -24,6 +25,36 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     opportunity_slug: z.string().min(1),
     fetcher: z.enum(["fetch", "firecrawl"]).default("fetch"),
     max_chars: z.number().int().min(2000).max(120000).default(40000),
+  }),
+  z.object({
+    provider: z.literal("research_agent"),
+    group: z.string().default("research"),
+    subject: z.discriminatedUnion("type", [
+      z.object({
+        type: z.literal("track"),
+        track: z.enum([
+          "whv_au",
+          "dama_au",
+          "professional",
+          "overseas",
+          "scholarship",
+        ]),
+      }),
+      z.object({
+        type: z.literal("opportunity"),
+        opportunity_slug: z.string().min(1),
+      }),
+    ]),
+    description: z.string().min(10).max(300),
+    queries: z.array(z.string().min(5).max(200)).min(1).max(8),
+    official_domains: z.array(z.string().min(3)).default([]),
+    reputable_domains: z.array(z.string().min(3)).optional(),
+    fields: z
+      .array(z.enum(CLAIM_FIELD_NAMES as [ClaimField, ...ClaimField[]]))
+      .optional(),
+    max_pages: z.number().int().min(1).max(20).default(8),
+    results_per_query: z.number().int().min(1).max(10).default(5),
+    max_chars: z.number().int().min(2000).max(120000).default(30000),
   }),
   z.object({
     provider: z.literal("adzuna"),
@@ -53,6 +84,10 @@ export type AtsConfig = Extract<
   { provider: "greenhouse" | "lever" | "ashby" | "smartrecruiters" }
 >;
 export type AdzunaConfig = Extract<SourceConfig, { provider: "adzuna" }>;
+export type ResearchAgentConfig = Extract<
+  SourceConfig,
+  { provider: "research_agent" }
+>;
 export type PageMonitorConfig = Extract<
   SourceConfig,
   { provider: "page_monitor" }

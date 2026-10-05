@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToPlanButton } from "@/components/add-to-plan";
+import { ClaimsPanel } from "@/components/claims-panel";
 import { SiteHeader } from "@/components/site-header";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
+import { loadClaims } from "@/lib/claims-query";
 import { formatDate } from "@/lib/format";
 import { EVENT_KIND_LABEL, EVENT_KIND_TONE, levelsLabel } from "@/lib/labels";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -46,6 +48,7 @@ export default async function BeasiswaDetailPage({
   const item = await load(slug);
   if (!item) notFound();
 
+  const claims = await loadClaims({ opportunityId: item.id });
   const supabase = createPublicClient();
   const { data: events } = await supabase
     .from("opportunity_events")
@@ -157,6 +160,13 @@ export default async function BeasiswaDetailPage({
             </ul>
           </section>
         )}
+
+        <section className="mt-8">
+          <h2 className="font-medium">Syarat</h2>
+          <div className="mt-3">
+            <ClaimsPanel claims={claims} />
+          </div>
+        </section>
 
         <div className="mt-8 flex flex-wrap gap-3">
           <a

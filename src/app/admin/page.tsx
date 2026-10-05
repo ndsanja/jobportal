@@ -66,6 +66,14 @@ export default async function AdminPage() {
             Antrean review ekstraksi ({pending.count ?? 0}) →
           </Link>
         </li>
+        <li>
+          <Link
+            href="/admin/claims"
+            className="font-medium underline underline-offset-4"
+          >
+            Klaim hasil riset (syarat &amp; bukti) →
+          </Link>
+        </li>
       </ul>
     </main>
   );

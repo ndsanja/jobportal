@@ -1,0 +1,41 @@
+-- Agen riset awal (status draft): mencari, membaca, dan mengekstrak syarat dari web.
+-- Uji dulu: POST /api/ingest/run?slug=<slug>&dry_run=1 (lihat docs/INGESTION.md).
+
+insert into public.sources (slug, name, kind, authority, trust_score, tracks, country_code, base_url, config, schedule, status, terms_note)
+values
+  ('research-whv-462', 'Riset syarat WHV 462 (Indonesia)', 'monitor', 'government', 90, '{whv_au}', 'AU',
+   'https://immi.homeaffairs.gov.au',
+   $j${"provider":"research_agent","group":"research","subject":{"type":"track","track":"whv_au"},
+   "description":"Work and Holiday visa (subclass 462) Australia untuk pemegang paspor Indonesia: syarat kelayakan dan dokumen",
+   "queries":["Work and Holiday visa subclass 462 Indonesia eligibility requirements","Home Affairs Work and Holiday visa 462 Indonesia age functional English evidence of funds","visa 462 Indonesia syarat usia bahasa Inggris dana tabungan","subclass 462 Indonesia ballot registration 2026"],
+   "official_domains":["homeaffairs.gov.au","indonesia.embassy.gov.au","imigrasi.go.id","dfat.gov.au"],"max_pages":8}$j$::jsonb,
+   'weekly', 'draft', 'Mencari di web; halaman resmi dibaca lebih dulu. Sumber non-resmi hanya tampil berlabel.'),
+  ('research-chevening', 'Riset syarat Chevening (Indonesia)', 'monitor', 'government', 90, '{scholarship}', 'GB',
+   'https://www.chevening.org',
+   $j${"provider":"research_agent","group":"research","subject":{"type":"opportunity","opportunity_slug":"chevening-indonesia"},
+   "description":"Chevening Scholarships untuk pelamar dari Indonesia: syarat kelayakan",
+   "queries":["Chevening scholarship eligibility criteria Indonesia","Chevening requirements work experience undergraduate degree return to Indonesia"],
+   "official_domains":["chevening.org"],"max_pages":6}$j$::jsonb,
+   'weekly', 'draft', null),
+  ('research-lpdp', 'Riset syarat LPDP', 'monitor', 'government', 90, '{scholarship}', 'ID',
+   'https://lpdp.kemenkeu.go.id',
+   $j${"provider":"research_agent","group":"research","subject":{"type":"opportunity","opportunity_slug":"lpdp"},
+   "description":"Beasiswa LPDP (Indonesia): persyaratan umum pendaftar",
+   "queries":["syarat umum beasiswa LPDP pendaftar","persyaratan beasiswa LPDP reguler IPK TOEFL IELTS usia"],
+   "official_domains":["lpdp.kemenkeu.go.id","kemenkeu.go.id"],"max_pages":6}$j$::jsonb,
+   'weekly', 'draft', null),
+  ('research-aas', 'Riset syarat Australia Awards Indonesia', 'monitor', 'government', 90, '{scholarship}', 'AU',
+   'https://www.australiaawardsindonesia.org',
+   $j${"provider":"research_agent","group":"research","subject":{"type":"opportunity","opportunity_slug":"australia-awards-indonesia"},
+   "description":"Australia Awards Scholarships untuk pelamar dari Indonesia: syarat kelayakan",
+   "queries":["Australia Awards Scholarships Indonesia eligibility requirements","Australia Awards Indonesia GPA English requirement who can apply"],
+   "official_domains":["australiaawardsindonesia.org","dfat.gov.au"],"max_pages":6}$j$::jsonb,
+   'weekly', 'draft', null),
+  ('research-gks', 'Riset syarat GKS (Korea)', 'monitor', 'government', 90, '{scholarship}', 'KR',
+   'https://www.studyinkorea.go.kr',
+   $j${"provider":"research_agent","group":"research","subject":{"type":"opportunity","opportunity_slug":"gks-korea"},
+   "description":"Global Korea Scholarship (GKS) untuk pelamar internasional: syarat usia, IPK, dan dokumen",
+   "queries":["Global Korea Scholarship graduate eligibility age GPA","GKS undergraduate eligibility requirements"],
+   "official_domains":["studyinkorea.go.kr","niied.go.kr"],"max_pages":6}$j$::jsonb,
+   'weekly', 'draft', null)
+on conflict (slug) do nothing;

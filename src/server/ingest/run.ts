@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
+import { type ResearchStats, runResearch } from "@/server/research/agent";
 import { runAdapter } from "./adapters";
 import { defaultFetch } from "./http";
 import { type MonitorStats, runMonitor } from "./monitor";
@@ -39,7 +40,7 @@ export type RunOptions = {
 export type SourceOutcome = {
   slug: string;
   status: "success" | "partial" | "failed";
-  stats?: PublishStats | MonitorStats;
+  stats?: PublishStats | MonitorStats | ResearchStats;
   error?: string;
 };
 
@@ -124,6 +125,7 @@ export async function runDueSources(options: RunOptions): Promise<RunSummary> {
       await processSource(db, row, {
         dryRun,
         fetch: options.fetch ?? defaultFetch,
+        deadlineMs: options.deadlineMs,
       }),
     );
   }
@@ -134,7 +136,7 @@ export async function runDueSources(options: RunOptions): Promise<RunSummary> {
 async function processSource(
   db: ReturnType<typeof createAdminClient>,
   row: SourceRow,
-  options: { dryRun: boolean; fetch: FetchLike },
+  options: { dryRun: boolean; fetch: FetchLike; deadlineMs: number },
 ): Promise<SourceOutcome> {
   const startedAt = new Date();
   const source = toIngestSource(row);
@@ -152,20 +154,35 @@ async function processSource(
   let outcome: SourceOutcome;
   try {
     if (row.kind === "monitor") {
-      const stats = await runMonitor(
-        db,
-        source,
-        {
-          fetch: options.fetch,
-          env: {
-            FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
-            OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
-            OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
-          },
-        },
-        { dryRun: options.dryRun, now: startedAt },
-      );
-      outcome = { slug: row.slug, status: "success", stats };
+      const env = {
+        FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
+        OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+        OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
+      };
+      const provider = (row.config as { provider?: unknown } | null)?.provider;
+      const stats =
+        provider === "research_agent"
+          ? await runResearch(
+              db,
+              source,
+              { fetch: options.fetch, env },
+              {
+                dryRun: options.dryRun,
+                now: startedAt,
+                deadlineMs: options.deadlineMs,
+              },
+            )
+          : await runMonitor(
+              db,
+              source,
+              { fetch: options.fetch, env },
+              { dryRun: options.dryRun, now: startedAt },
+            );
+      outcome = {
+        slug: row.slug,
+        status: "partial" in stats && stats.partial ? "partial" : "success",
+        stats,
+      };
     } else {
       const result = await runAdapter(source, {
         fetch: options.fetch,

@@ -77,3 +77,25 @@ export async function fetchPageText(
     truncated,
   };
 }
+
+/** Coba `fetch` biasa dulu (gratis); bila gagal/terlalu pendek/PDF dan ada kunci, ulangi lewat Firecrawl. */
+export async function fetchPageTextWithFallback(
+  url: string,
+  options: { fetch: FetchLike; firecrawlKey?: string; maxChars: number },
+): Promise<PageText> {
+  try {
+    return await fetchPageText(url, {
+      fetcher: "fetch",
+      fetch: options.fetch,
+      maxChars: options.maxChars,
+    });
+  } catch (error) {
+    if (!options.firecrawlKey) throw error;
+    return fetchPageText(url, {
+      fetcher: "firecrawl",
+      fetch: options.fetch,
+      firecrawlKey: options.firecrawlKey,
+      maxChars: options.maxChars,
+    });
+  }
+}

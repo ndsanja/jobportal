@@ -51,3 +51,37 @@ export function expiryWarning(
   horizon.setUTCMonth(horizon.getUTCMonth() + months);
   return expiry.getTime() <= horizon.getTime() ? "expiring" : null;
 }
+
+/** Kode jenis dokumen yang valid (sinkron dengan tabel `document_types`). */
+export const DOCUMENT_TYPE_CODES = [
+  "passport",
+  "ktp",
+  "kk",
+  "birth_certificate",
+  "diploma",
+  "transcript",
+  "diploma_legalized",
+  "sworn_translation",
+  "loa",
+  "ielts",
+  "toefl_ibt",
+  "pte",
+  "toefl_itp",
+  "topik",
+  "jlpt",
+  "german_cert",
+  "cv",
+  "motivation_letter",
+  "recommendation_letter",
+  "work_reference",
+  "research_proposal",
+  "skck",
+  "medical_checkup",
+  "bank_statement",
+  "rsa_certificate",
+  "white_card",
+  "first_aid",
+  "food_safety",
+  "driver_license",
+  "seafarer_book",
+] as const;

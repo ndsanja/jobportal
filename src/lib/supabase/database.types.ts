@@ -29,6 +29,121 @@ export type Database = {
         };
         Relationships: [];
       };
+      claim_evidence: {
+        Row: {
+          claim_id: string;
+          id: string;
+          model: string | null;
+          page_hash: string | null;
+          quote: string;
+          quote_key: string;
+          retrieved_at: string;
+          source_domain: string;
+          source_tier: string;
+          source_url: string;
+          stance: string;
+        };
+        Insert: {
+          claim_id: string;
+          id?: string;
+          model?: string | null;
+          page_hash?: string | null;
+          quote: string;
+          quote_key: string;
+          retrieved_at?: string;
+          source_domain: string;
+          source_tier: string;
+          source_url: string;
+          stance?: string;
+        };
+        Update: {
+          claim_id?: string;
+          id?: string;
+          model?: string | null;
+          page_hash?: string | null;
+          quote?: string;
+          quote_key?: string;
+          retrieved_at?: string;
+          source_domain?: string;
+          source_tier?: string;
+          source_url?: string;
+          stance?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "claim_evidence_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      claims: {
+        Row: {
+          confidence: number;
+          created_at: string;
+          decided_by: string;
+          evidence_count: number;
+          field: string;
+          id: string;
+          last_verified_at: string;
+          opportunity_id: string | null;
+          status: string;
+          subject_key: string;
+          subject_type: string;
+          summary: string;
+          track: Database["public"]["Enums"]["track"] | null;
+          updated_at: string;
+          value: Json;
+          value_key: string;
+        };
+        Insert: {
+          confidence?: number;
+          created_at?: string;
+          decided_by?: string;
+          evidence_count?: number;
+          field: string;
+          id?: string;
+          last_verified_at?: string;
+          opportunity_id?: string | null;
+          status?: string;
+          subject_key: string;
+          subject_type: string;
+          summary: string;
+          track?: Database["public"]["Enums"]["track"] | null;
+          updated_at?: string;
+          value: Json;
+          value_key: string;
+        };
+        Update: {
+          confidence?: number;
+          created_at?: string;
+          decided_by?: string;
+          evidence_count?: number;
+          field?: string;
+          id?: string;
+          last_verified_at?: string;
+          opportunity_id?: string | null;
+          status?: string;
+          subject_key?: string;
+          subject_type?: string;
+          summary?: string;
+          track?: Database["public"]["Enums"]["track"] | null;
+          updated_at?: string;
+          value?: Json;
+          value_key?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "claims_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       countries: {
         Row: {
           code: string;

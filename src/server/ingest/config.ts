@@ -91,6 +91,8 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     /** Agen daftar perusahaan DAMA: mencari daftar pemberi kerja berperjanjian DAMA. */
     provider: z.literal("employer_registry"),
     group: z.string().default("discovery"),
+    /** Halaman resmi wilayah DAMA yang selalu dibaca; tautan "business/employer/sponsor" di dalamnya diikuti sekali. */
+    seed_urls: z.array(z.url()).max(20).default([]),
     queries: z.array(z.string().min(5).max(200)).min(1).max(40),
     queries_per_run: z.number().int().min(1).max(12).default(5),
     results_per_query: z.number().int().min(1).max(10).default(6),

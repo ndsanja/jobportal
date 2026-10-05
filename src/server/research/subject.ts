@@ -178,6 +178,8 @@ export function buildOpportunitySpec(
             q: `beasiswa ${name} ${year} syarat pendaftaran jadwal`,
             recency: "year",
           },
+          // Riwayat siklus sebelumnya (untuk timeline & prediksi siklus berikutnya).
+          { q: `jadwal timeline beasiswa ${name} ${year - 1} ${year - 2}` },
         ]
       : [
           { q: `${name} Indonesia requirements how to apply` },
@@ -208,7 +210,7 @@ export function buildOpportunitySpec(
     officialDomains: overrides.official_domains ?? officialDomains,
     reputableDomains: overrides.reputable_domains ?? DEFAULT_REPUTABLE_DOMAINS,
     fields: FIELD_PROFILES[profile],
-    maxPages: overrides.max_pages ?? 6,
+    maxPages: overrides.max_pages ?? (profile === "scholarship" ? 8 : 6),
     resultsPerQuery: overrides.results_per_query ?? 4,
     maxChars: overrides.max_chars ?? 30000,
   };

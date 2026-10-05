@@ -5,7 +5,7 @@
 
 ## 0. Ringkasan
 
-**Bisa, dan stack ini cocok.** Next.js 16 + Bun + Supabase sudah mencakup hampir semua kebutuhan Karir Pro: web app & SEO, login, database, penyimpanan dokumen, keamanan per user (RLS), cron, full-text search (konfigurasi `indonesian` & `english` sudah tersedia di project), sampai vector search untuk rekomendasi. Yang perlu ditambahkan hanya tiga: **worker crawler** (Bun/TypeScript, berjalan di GitHub Actions lalu pindah ke VPS), **AI extraction** (OpenRouter/DeepSeek), dan **email** (Resend). Di tahap ini tidak perlu backend terpisah (Rust/Axum).
+**Bisa, dan stack ini cocok.** Next.js 16 + Bun + Supabase sudah mencakup hampir semua kebutuhan Karir Pro: web app & SEO, login, database, penyimpanan dokumen, keamanan per user (RLS), cron, full-text search (konfigurasi `indonesian` & `english` sudah tersedia di project), sampai vector search untuk rekomendasi. Yang perlu ditambahkan hanya tiga: **pipeline ingestion** (Route Handlers Next.js yang dijadwalkan `pg_cron` Supabase), **AI extraction** (OpenRouter/DeepSeek), dan **email** (Resend). Di tahap ini tidak perlu backend terpisah (Rust/Axum).
 
 Empat prinsip yang membuat data **cepat, akurat, dan (hampir) gratis**:
 
@@ -21,21 +21,22 @@ Empat prinsip yang membuat data **cepat, akurat, dan (hampir) gratis**:
 | Kebutuhan | Solusi | Catatan |
 |---|---|---|
 | Web app, SEO, UI | Next.js 16.3 (App Router, RSC, Server Actions, Turbopack), React 19, Tailwind CSS v4, shadcn/ui | Di Next 16 `middleware.ts` diganti `proxy.ts`; `next lint` dihapus → pakai Biome |
-| Package manager, script, test, runtime worker | Bun 1.3 (`bun install`, `bun test`, `bun run ingest`) | Next.js berjalan di runtime Node (default Vercel); Bun untuk install, script, test, dan worker — kombinasi paling stabil |
+| Package manager & script | Bun 1.3 (`bun install`, `bun run dev/build`), pengganti npm | Bun **hanya** package manager. Aplikasi dan seluruh backend berjalan di runtime Node milik Next.js (Vercel); tidak ada runtime Bun di produksi |
 | Database | Supabase Postgres 17 | FTS `indonesian`/`english`, `pg_trgm`, `unaccent` |
 | Login | Supabase Auth: Google + email OTP | `@supabase/ssr` 0.12, verifikasi sesi dengan `getClaims()` |
 | Document Vault | Supabase Storage (bucket privat) + RLS per user | akses lewat signed URL berumur pendek |
 | Jadwal & antrian | `pg_cron` (job SQL); `pgmq` bila perlu | |
 | Notifikasi in-app | tabel `notifications` + Supabase Realtime | |
 | Rekomendasi semantik (fase lanjut) | `pgvector` 0.8 (tersedia) | |
-| Crawler / ingestion | Worker Bun di **GitHub Actions** (repo privat: 2.000 menit/bulan) → VPS kecil saat produksi | Edge Functions Supabase berjalan di Deno, CPU 2 detik/request, tanpa headless browser → hanya untuk tugas kecil |
+| Crawler / ingestion | **Route Handlers Next.js** (`src/app/api/ingest/*`) di Vercel, dipicu **`pg_cron` + `pg_net`** Supabase (HTTP POST berjadwal + secret) | Tanpa server/worker terpisah. Tiap panggilan memproses sebagian sumber (batas ±240 detik), sisanya dikerjakan panggilan berikutnya |
 | AI | OpenRouter (`deepseek/deepseek-v4.1-flash`), output JSON + validasi Zod | |
 | Email | Resend (gratis 3.000 email/bulan) | |
 
 **Batasan yang perlu diketahui**
 - **Supabase Free:** DB 500 MB, storage 1 GB, 50k MAU, project **di-pause setelah 7 hari tanpa aktivitas**, tanpa backup → **upgrade ke Pro ($25/bulan) saat launch**.
 - **Vercel Hobby tidak boleh dipakai komersial** → saat monetisasi pakai Vercel Pro ($20/bulan) atau self-host di VPS.
-- **GitHub Actions:** jadwal cron bisa telat beberapa menit, dan workflow terjadwal **otomatis nonaktif jika repo publik 60 hari tanpa aktivitas**. Jika repo dijadikan privat, kuota gratisnya 2.000 menit/bulan.
+- **Vercel:** Cron bawaan Vercel di paket Hobby hanya 1×/hari (presisi ±1 jam), karena itu jadwal memakai `pg_cron` + `pg_net` Supabase (frekuensi bebas, gratis). Durasi fungsi maks 300 detik di Hobby dan 800 detik di Pro → pekerjaan dipecah menjadi batch kecil dan idempoten.
+- **GitHub Actions** hanya dipakai untuk CI (lint, typecheck, build).
 - **Edge Functions:** wall-clock 150 detik (Free) / 400 detik (Pro), CPU 2 detik per request, memori 256 MB.
 
 ---
@@ -144,7 +145,8 @@ Instagram, Telegram, TikTok, Reddit, grup WA, dan kiriman user masuk ke **tip in
  Sumber (API · ATS · JSON-LD · CSV · HTML/PDF)
                  │
                  ▼
- ┌──────── Worker Bun (GitHub Actions → VPS) ────────┐
+ ┌── Route Handlers Next.js /api/ingest (Vercel) ────┐
+ │ dipicu pg_cron + pg_net (Supabase)                 │
  │ jadwal → fetch → deteksi perubahan → parse         │
  │ → AI extract (hanya jika berubah) → normalisasi    │
  │ → dedupe → verifikasi & skor → publish / review    │
@@ -160,11 +162,11 @@ Instagram, Telegram, TikTok, Reddit, grup WA, dan kiriman user masuk ke **tip in
                          ▼
         Next.js 16 — web Karir Pro (Vercel)
         halaman publik di-cache · data user dinamis
-        worker → POST /api/revalidate setelah data berubah
+        route ingest memanggil revalidateTag() langsung setelah data berubah
 ```
 
 ### 3.1 Pipeline ingestion (per run sumber)
-1. **Jadwal** — `bun run ingest --due` mengambil sumber yang `next_run_at`-nya sudah lewat.
+1. **Jadwal** — `pg_cron` memanggil `POST /api/ingest/run`; route mengambil sumber yang `next_run_at`-nya sudah lewat dan memprosesnya sampai batas waktu ±240 detik.
 2. **Fetch** — conditional GET dan rate limit per domain; snapshot teks bersih (gzip) disimpan ke Storage.
 3. **Deteksi perubahan** — hash teks bersih. Jika tidak berubah, cukup perbarui `last_checked_at`/`last_verified_at`. **Biaya AI = 0.**
 4. **Parse** — adapter terstruktur (API/ATS/JSON-LD/CSV) langsung ke normalisasi; HTML/PDF tak terstruktur diteruskan ke AI.
@@ -183,35 +185,35 @@ Instagram, Telegram, TikTok, Reddit, grup WA, dan kiriman user masuk ke **tip in
 - +5 bila ≥2 sumber sepakat; turun bila melewati SLA verifikasi.
 - Badge: 🟢 Terverifikasi · 🟡 Dari agregator · ⚠️ Perlu verifikasi ulang (lewat SLA: lowongan 7 hari; beasiswa 30 hari, atau 7 hari bila deadline < 60 hari; aturan program 7 hari) · 🔴 Ditutup.
 
-### 3.3 Struktur repo (satu paket Bun, tanpa monorepo)
+### 3.3 Struktur repo (satu aplikasi Next.js, tanpa monorepo; Bun hanya package manager)
 ```
 jobportal/
 ├─ src/
-│  ├─ app/              # route (lihat §8)
+│  ├─ app/              # halaman (lihat §8) + route API:
+│  │                    #   api/ingest/run, api/ingest/[slug] (admin/dry-run), api/notify/run
 │  ├─ components/       # UI (shadcn/ui)
 │  ├─ features/         # explore, profile, vault, plan, timeline, admin
-│  ├─ domain/           # TS murni, dipakai web & worker: tipe, skema Zod,
+│  ├─ domain/           # TS murni, dipakai halaman & route API: tipe, skema Zod,
 │  │                    #   evaluator syarat, skor, util tanggal
 │  ├─ lib/supabase/     # server.ts, client.ts, admin.ts, database.types.ts
+│  ├─ server/ingest/    # logika ingestion (hanya server)
+│  │  ├─ adapters/      # greenhouse, lever, ashby, smartrecruiters, jsonld, adzuna,
+│  │  │                 #   jooble, ba-jobsuche, csv-register, html-monitor, pdf
+│  │  ├─ pipeline/      # fetch, change-detect, extract-ai, normalize, dedupe, verify, publish
+│  │  └─ __fixtures__/  # respons tersimpan untuk test
 │  └─ proxy.ts          # refresh sesi Supabase (pengganti middleware di Next 16)
-├─ ingest/
-│  ├─ cli.ts            # bun run ingest --due | --source=<slug>
-│  ├─ adapters/         # greenhouse, lever, ashby, smartrecruiters, jsonld, adzuna,
-│  │                    #   jooble, ba-jobsuche, csv-register, html-monitor, pdf
-│  ├─ pipeline/         # fetch, change-detect, extract-ai, normalize, dedupe, verify, publish
-│  └─ __fixtures__/     # respons tersimpan untuk test
 ├─ supabase/
 │  ├─ migrations/       # SQL = sumber kebenaran skema
 │  └─ seed/             # countries, document_types, tracks, sources, step_templates
-├─ .github/workflows/   # ci.yml, ingest.yml (cron), notify.yml (cron)
+├─ .github/workflows/   # ci.yml (lint, typecheck, build)
 └─ docs/PLAN.md
 ```
 
 ### 3.4 Catatan Next.js 16 + Supabase
 - `src/proxy.ts` me-refresh sesi; halaman privat dicek dengan `supabase.auth.getClaims()`.
-- `cacheComponents: true`: halaman publik (daftar, detail, kalender) memakai `"use cache"` + `cacheTag("opp:<id>")`/`cacheLife`; worker memanggil `POST /api/revalidate` (dengan secret) → `revalidateTag(tag, "max")`. Data user (rencana, readiness) dirender dinamis di dalam `<Suspense>`.
+- `cacheComponents: true`: halaman publik (daftar, detail, kalender) memakai `"use cache"` + `cacheTag("opp:<id>")`/`cacheLife`; route ingest memanggil `revalidateTag(tag, "max")` langsung setelah data berubah. Data user (rencana, readiness) dirender dinamis di dalam `<Suspense>`.
 - Di dalam scope `"use cache"` cookies tidak boleh dibaca, jadi data publik diambil dengan client Supabase tanpa sesi (publishable key).
-- Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (server/worker saja), `OPENROUTER_API_KEY`, `ADZUNA_APP_ID`/`ADZUNA_APP_KEY`, `JOOBLE_API_KEY`, `RESEND_API_KEY`, `FIRECRAWL_API_KEY`, `REVALIDATE_SECRET`. Semua secret hanya disimpan di env Vercel dan GitHub Actions secrets.
+- Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (server saja), `OPENROUTER_API_KEY`, `ADZUNA_APP_ID`/`ADZUNA_APP_KEY`, `JOOBLE_API_KEY`, `RESEND_API_KEY`, `FIRECRAWL_API_KEY`, `CRON_SECRET`. Semua secret hanya disimpan di env Vercel; rahasia pemicu cron (`CRON_SECRET`) juga disimpan di Supabase Vault untuk dipakai `pg_net`.
 
 ---
 
@@ -252,7 +254,7 @@ Semua tabel: PK `uuid`, `created_at`/`updated_at`, **RLS aktif**.
 - `partners`, `partner_offers` (target `gap_type`: english, cv, rsa, translation, …), `cta_events` (impresi/klik)
 
 **RLS & Storage**
-- Peluang & referensi: `select` publik (hanya yang sudah terbit); tulis hanya oleh worker (secret key) & admin.
+- Peluang & referensi: `select` publik (hanya yang sudah terbit); tulis hanya oleh route ingestion (secret key, server-only) & admin.
 - Data user: `user_id = (select auth.uid())`. Admin: klaim `app_metadata.role = 'admin'`.
 - Bucket `user-documents` privat, path `{user_id}/{document_id}.{ext}`, maks 10 MB, MIME pdf/jpg/png/webp; policy `(storage.foldername(name))[1] = auth.uid()::text`.
 - Ekstensi: `pg_trgm`, `unaccent`, `pg_cron` (Fase 1) · `vector` (Fase 4).
@@ -273,7 +275,7 @@ Syarat disimpan sebagai aturan yang bisa dievaluasi mesin. Contoh **format** (an
 { "kind": "funds",       "rule": { "amount": 5000, "currency": "AUD" } }
 ```
 
-Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilkan status per syarat: **terpenuhi** · **belum** · **belum diketahui** · **akan kedaluwarsa** · **cek manual**. Syarat level track (mis. syarat visa WHV) otomatis berlaku untuk semua lowongan WHV; syarat level lowongan (RSA, pengalaman) ditambahkan di atasnya.
+Evaluator (TypeScript murni di `src/domain`, diuji dengan Vitest) menghasilkan status per syarat: **terpenuhi** · **belum** · **belum diketahui** · **akan kedaluwarsa** · **cek manual**. Syarat level track (mis. syarat visa WHV) otomatis berlaku untuk semua lowongan WHV; syarat level lowongan (RSA, pengalaman) ditambahkan di atasnya.
 
 ### 5.2 Readiness & rekomendasi
 - **Readiness** = seberapa siap user mendaftar (bobot syarat wajib yang terpenuhi). Contoh: "WHV Australia — 82% siap · 3 hal perlu dilengkapi".
@@ -337,11 +339,11 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 **Fase 0 — Fondasi (±1 minggu)**
 - Scaffold `bunx create-next-app@latest` (Next 16, TypeScript, Tailwind v4, App Router, `src/`, Biome) + shadcn/ui + Zod.
 - Supabase: `@supabase/ssr` + `src/proxy.ts`, Auth (Google + email OTP), migrasi awal (referensi, tracks, sources), seed negara & jenis dokumen.
-- CI GitHub Actions: `bun install` → Biome → `tsc --noEmit` → `bun test` → `next build`. Deploy preview di Vercel.
+- CI GitHub Actions: `bun install` → Biome → `tsc --noEmit` → `next build`. Deploy preview di Vercel.
 
 **Fase 1 — Mesin data + Explore (±3 minggu)**
 - Skema peluang + RLS + full-text search.
-- Worker `ingest/` + adapter: Greenhouse, Lever, Ashby, SmartRecruiters, JSON-LD, Adzuna, Jooble, BA Jobsuche, CSV register, HTML monitor + AI extraction, PDF.
+- Route Handlers `/api/ingest/*` + adapter (di `src/server/ingest`): Greenhouse, Lever, Ashby, SmartRecruiters, JSON-LD, Adzuna, Jooble, BA Jobsuche, CSV register, HTML monitor + AI extraction, PDF.
 - Seed ±30 sumber (§2) + daftar employer target → deteksi ATS otomatis.
 - Kurasi 30–40 beasiswa inti + knowledge base WHV & 13 DAMA (dengan kutipan sumber). Spike akses SISKOP2MI.
 - Halaman publik §8, pencarian & filter, kalender beasiswa, halaman SEO evergreen.
@@ -362,7 +364,7 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 - AI Document Intelligence (dengan izin), CV builder/analyzer.
 - Langganan Pro lewat Midtrans/Xendit (QRIS, VA, e-wallet); employer & P3MI terverifikasi bisa memasang lowongan; featured job.
 - Rekomendasi semantik (pgvector), alert WhatsApp/Telegram.
-- Kerja sama data (KP2MI, lisensi Adzuna); worker dipindah ke VPS.
+- Kerja sama data (KP2MI, lisensi Adzuna); bila batas durasi/biaya Vercel mengganggu, ingestion dipindah ke VPS (kode adapter sama).
 
 ---
 
@@ -372,7 +374,7 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 |---|---|---|
 | Supabase | Free ($0) | Pro $25/bulan (DB 8 GB, storage 100 GB, backup harian, tidak di-pause) |
 | Hosting Next.js | Vercel Hobby ($0, non-komersial) | Vercel Pro $20/bulan **atau** VPS ±$5–10/bulan |
-| Worker ingestion | GitHub Actions ($0, repo privat: 2.000 menit/bulan) | tetap, atau VPS yang sama |
+| Ingestion (Route Handlers + `pg_cron`/`pg_net`) | termasuk di Vercel Hobby & Supabase Free | pemakaian fungsi ikut tagihan Vercel Pro |
 | AI (DeepSeek via OpenRouter) | ±$2–5/bulan | sesuai volume |
 | Firecrawl | Free (±1.000 kredit/bulan) | Hobby ±$16/bulan bila perlu |
 | Email | Resend Free (3.000/bulan) | paket berbayar bila perlu |
@@ -383,8 +385,8 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 ---
 
 ## 11. Verifikasi & QA
-- **Unit test (`bun test`):** evaluator syarat (batas umur, ekuivalensi skor, kedaluwarsa dokumen), parsing tanggal (format Indonesia/Inggris, zona waktu), dedupe, skor confidence, validator kutipan bukti.
-- **Adapter test** dengan fixture tersimpan (`ingest/__fixtures__`) — CI tidak memanggil internet.
+- **Unit test (Vitest, berjalan di Node):** evaluator syarat (batas umur, ekuivalensi skor, kedaluwarsa dokumen), parsing tanggal (format Indonesia/Inggris, zona waktu), dedupe, skor confidence, validator kutipan bukti.
+- **Adapter test** dengan fixture tersimpan (`src/server/ingest/__fixtures__`) — CI tidak memanggil internet.
 - **Database:** jalankan Supabase advisors (security & performance) setelah tiap migrasi; uji RLS dengan dua user (user A tidak bisa membaca dokumen user B).
 - **E2E (Playwright):** onboarding → simpan peluang → checklist → timeline → notifikasi.
 - **Dashboard kualitas data:** % data basi, % confidence rendah, sumber yang gagal, umur antrian review.
@@ -396,7 +398,8 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 
 **Sudah diputuskan**
 - AI: OpenRouter `deepseek/deepseek-v4.1-flash`.
-- Repo **privat** → GitHub Actions 2.000 menit/bulan; anggaran job ±1.070 menit (lihat `DATA-SOURCES.md` §10a), pindah ke VPS bila mepet.
+- Backend: **API Next.js (Route Handlers)**; Bun hanya sebagai package manager (pengganti npm).
+- Repo **privat**; GitHub Actions hanya untuk CI. Ingestion dijadwalkan `pg_cron` + `pg_net` (lihat `DATA-SOURCES.md` §10a).
 - Admin: `ndsanja@gmail.com` (klaim `app_metadata.role = 'admin'`).
 - UI: Bahasa Indonesia.
 - Hosting: **Vercel** (tim `ndsanjas-projects`, sudah terkoneksi). Hobby untuk build/beta; naik ke Pro ($20/bulan) sebelum ada monetisasi.

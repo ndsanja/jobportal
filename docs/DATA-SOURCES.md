@@ -1,7 +1,7 @@
 # Karir Pro — Peta Sumber Data & Cara Mendapatkannya
 
 > Pendamping `docs/PLAN.md`. Dokumen ini menjawab satu pertanyaan: **untuk setiap data yang dibutuhkan alur Karir Pro, datanya diambil dari mana, dengan cara apa, seberapa sering, dan siapa yang memverifikasi.**
-> Diperbarui 5 Oktober 2026. Keputusan yang dipakai: hosting **Vercel** (tim `ndsanjas-projects`), scraping halaman sulit lewat **Firecrawl**, AI lewat **OpenRouter `deepseek/deepseek-v4.1-flash`**, repo **privat**, admin **ndsanja@gmail.com**, UI **Bahasa Indonesia**.
+> Diperbarui 5 Oktober 2026. Keputusan yang dipakai: backend **API Next.js (Route Handlers)** dengan Bun hanya sebagai package manager, hosting **Vercel** (tim `ndsanjas-projects`), scraping halaman sulit lewat **Firecrawl**, AI lewat **OpenRouter `deepseek/deepseek-v4.1-flash`**, repo **privat**, admin **ndsanja@gmail.com**, UI **Bahasa Indonesia**.
 
 ---
 
@@ -53,7 +53,7 @@ Prinsip urutan metode untuk setiap sumber (dari yang paling murah & akurat):
 |---|---|---|
 | **Adzuna API** (`api.adzuna.com/v1/api/jobs/au/search`) | Daftar di developer.adzuna.com → `app_id` + `app_key`. Query per kombinasi *kata kunci WHV* × *negara bagian*: `farm hand`, `fruit picker`, `packer`, `harvest`, `housekeeping`, `kitchen hand`, `barista`, `waiter`, `cleaner`, `labourer`, `working holiday`, `backpacker`, `88 days` | 250 hit/hari cukup untuk ±40 query × 2 halaman/hari. Untuk komersial perlu lisensi (hubungi Adzuna setelah trial). Atribusi "Jobs by Adzuna". |
 | **Jooble API** (`POST jooble.org/api/<key>`) | Minta key di jooble.org/api/about; query sama | Deskripsi terpotong → tampilkan ringkasan + tombol ke sumber |
-| **Career page employer WHV-friendly** | Admin menyusun daftar ±50 employer (resort di wilayah remote, perusahaan agribisnis besar, ski resort, operator taman nasional, jaringan hotel). Worker mendeteksi ATS-nya (§3) | Paling akurat; lowongan hilang dari feed = tutup |
+| **Career page employer WHV-friendly** | Admin menyusun daftar ±50 employer (resort di wilayah remote, perusahaan agribisnis besar, ski resort, operator taman nasional, jaringan hotel). Pipeline ingestion mendeteksi ATS-nya (§3) | Paling akurat; lowongan hilang dari feed = tutup |
 | **Fair Work pay guides** | Kurasi tabel upah minimum per award (Horticulture, Hospitality, Cleaning) | Ditampilkan sebagai "upah minimum wajar" di halaman lowongan |
 | SEEK, Indeed, Jora, Workforce Australia, Backpacker Job Board, Gumtree | **Deeplink** saja: tombol "Cari juga di SEEK" dengan URL pencarian yang sudah diisi kata kunci & lokasi | Tidak di-scrape |
 
@@ -80,7 +80,7 @@ Prinsip urutan metode untuk setiap sumber (dari yang paling murah & akurat):
 ## 3. Kerja profesional (Australia & global)
 
 ### 3a. Career page perusahaan lewat API publik ATS (sumber utama, gratis, resmi)
-Admin cukup mengisi **nama perusahaan + URL career page**. Worker mendeteksi ATS dari HTML/redirect, lalu memakai endpoint publiknya:
+Admin cukup mengisi **nama perusahaan + URL career page**. Pipeline ingestion mendeteksi ATS dari HTML/redirect, lalu memakai endpoint publiknya:
 
 | ATS | Endpoint publik (tanpa auth) | Deteksi dari URL/HTML |
 |---|---|---|
@@ -156,8 +156,8 @@ Pencocokan nama perusahaan: normalisasi (huruf kecil, buang "Ltd/Pty/GmbH/B.V.")
 1. **Seed manual (hari 1–2):** admin mengisi ±30–40 program di editor admin: nama, penyelenggara, negara, jenjang, pendanaan, `official_url`, `apply_url`, syarat (dengan kutipan), dan siklus terbaru.
 2. **Siklus & event:** setiap program punya `opportunity_cycles` (mis. "2027/28") dan `opportunity_events` (buka, tutup, tes, wawancara, pengumuman).
 3. **Tanggal belum diumumkan?** Sistem menghitung **perkiraan** dari siklus 2–3 tahun sebelumnya (median bulan buka/tutup) dan menampilkannya dengan label "Perkiraan". Data siklus lama diisi admin sekali dari arsip pengumuman resmi (Wayback Machine boleh dipakai sebagai referensi tanggal).
-4. **Pemantauan:** worker memantau halaman resmi (hash teks bersih). Begitu berubah → AI mengekstrak field baru + kutipan → diff → **review admin** → terbit → notifikasi ke user yang menyimpan.
-5. **Erasmus Mundus (volume besar):** sekali per siklus (Sept–Okt), worker mengambil semua link program dari katalog, lalu AI mengekstrak deadline, beasiswa, syarat, dan link aplikasi dari website tiap program; hasil dengan confidence rendah masuk review.
+4. **Pemantauan:** pipeline ingestion memantau halaman resmi (hash teks bersih). Begitu berubah → AI mengekstrak field baru + kutipan → diff → **review admin** → terbit → notifikasi ke user yang menyimpan.
+5. **Erasmus Mundus (volume besar):** sekali per siklus (Sept–Okt), pipeline ingestion mengambil semua link program dari katalog, lalu AI mengekstrak deadline, beasiswa, syarat, dan link aplikasi dari website tiap program; hasil dengan confidence rendah masuk review.
 
 ### 5c. Kalender
 Tidak butuh sumber terpisah: kalender = query `opportunity_events` (+ event perkiraan) yang difilter negara/jenjang/pendanaan, ditampilkan per bulan, bisa diekspor sebagai **feed ICS** pribadi.
@@ -220,17 +220,18 @@ Admin: `ndsanja@gmail.com` mendapat klaim `app_metadata.role = 'admin'` setelah 
 
 ## 10. Mesin pengambil data — implementasi dengan keputusan terbaru
 
-### 10a. Worker (repo privat → kuota GitHub Actions 2.000 menit/bulan)
-| Job | Isi | Jadwal | Perkiraan menit/bulan |
-|---|---|---|---|
-| `ingest-jobs` | Adzuna, Jooble, ATS, BA Jobsuche | 2× sehari, ±8 menit | ±480 |
-| `monitor-pages` | Hash halaman resmi WHV/DAMA/beasiswa/program + AI bila berubah | 1× sehari, ±6 menit | ±180 |
-| `liveness` | cek lowongan masih buka | 1× sehari, ±5 menit | ±150 |
-| `registers` | UK/NL/CA/US sponsor, P3MI, postcode | 1× seminggu, ±5 menit | ±20 |
-| `notify` | kirim email notifikasi tertunda | tiap 3 jam, ±1 menit | ±240 |
-| **Total** | | | **±1.070 (aman di bawah 2.000)** |
+### 10a. Job terjadwal (Route Handlers Next.js + `pg_cron`/`pg_net` Supabase)
+Tidak ada worker terpisah. Supabase memanggil endpoint Next.js di Vercel dengan header `Authorization: Bearer <CRON_SECRET>` (rahasia disimpan di Supabase Vault; ekstensi `pg_cron` dan `pg_net` tersedia di project).
 
-Tugas yang murni SQL (tutup otomatis setelah deadline, tandai data basi, membuat baris notifikasi) dijalankan `pg_cron` di Supabase — tidak memakai menit GitHub. Jika kuota mulai mepet, pindahkan worker ke VPS kecil (±$5/bulan) tanpa mengubah kode (`bun run ingest --due`).
+| Endpoint | Isi | Pemicu (`pg_cron`) |
+|---|---|---|
+| `POST /api/ingest/run?group=jobs` | Adzuna, Jooble, ATS, BA Jobsuche | tiap 12 jam |
+| `POST /api/ingest/run?group=pages` | pantau halaman resmi WHV/DAMA/beasiswa/program + AI bila berubah | harian |
+| `POST /api/ingest/run?group=liveness` | cek lowongan masih buka | harian |
+| `POST /api/ingest/run?group=registers` | sponsor UK/NL/CA/US, P3MI, postcode | mingguan |
+| `POST /api/notify/run` | kirim email/notifikasi tertunda | tiap 3 jam |
+
+**Batas & cara kerja:** fungsi Vercel maks 300 detik (Hobby) / 800 detik (Pro), jadi setiap panggilan hanya memproses batch sumber yang `next_run_at`-nya sudah lewat sampai ±240 detik, lalu berhenti. Sumber yang belum sempat diproses diambil panggilan berikutnya (idempoten, aman diulang). Cron bawaan Vercel di Hobby hanya 1×/hari, itulah alasan jadwal dipegang `pg_cron`. Tugas yang murni SQL (tutup otomatis setelah deadline, tandai data basi, membuat baris notifikasi) dijalankan `pg_cron` langsung tanpa memanggil Next.js. Jika batas durasi atau biaya mengganggu, ingestion bisa dipindah ke VPS karena kode adapter-nya sama.
 
 ### 10b. AI via OpenRouter — `deepseek/deepseek-v4.1-flash`
 - **Harga (cek ulang di halaman model OpenRouter):** ±$0,15 / 1 jt token input, ±$0,60 / 1 jt token output. Untuk 600 ekstraksi/bulan (10 rb input + 2 rb output): ±**$1,6/bulan**.
@@ -246,7 +247,7 @@ Firecrawl (API scraping: `scrape`, `map`, `crawl`, `extract`) **membantu**, tapi
 |---|---|---|
 | Adzuna, Jooble, ATS (Greenhouse/Lever/…), BA Jobsuche, CSV register | **Tidak** | sudah JSON/CSV terstruktur; Firecrawl hanya menambah biaya |
 | Halaman resmi statis (Home Affairs, LPDP, Chevening, AAS) | Opsional | `fetch` + parser biasa cukup; Firecrawl berguna untuk output **markdown bersih** (hemat token AI, hash lebih stabil) |
-| Situs berat JavaScript / SPA (sebagian situs DAR DAMA, website program Erasmus Mundus, portal kampus, SISKOP2MI bila dirender JS) | **Ya** | merender JS tanpa kita menjalankan Playwright → hemat menit GitHub Actions |
+| Situs berat JavaScript / SPA (sebagian situs DAR DAMA, website program Erasmus Mundus, portal kampus, SISKOP2MI bila dirender JS) | **Ya** | merender JS tanpa kita menjalankan Playwright → hemat waktu eksekusi fungsi Vercel |
 | PDF (booklet LPDP, guideline GKS, daftar okupasi DAMA) | **Ya** | mengubah PDF ke markdown/teks |
 | Menemukan semua link program (katalog Erasmus Mundus, daftar beasiswa kampus) | **Ya** — `map` | daftar URL satu situs dalam satu panggilan |
 | SEEK, Indeed, LinkedIn, situs yang ToS-nya melarang scraping | **Tidak** | larangan ToS tetap berlaku walau lewat Firecrawl |
@@ -263,7 +264,7 @@ Firecrawl (API scraping: `scrape`, `map`, `crawl`, `extract`) **membantu**, tapi
 2. **Cari jalur terstruktur** (urut): API resmi → ATS publik → file CSV/XLSX/PDF → JSON-LD → sitemap/RSS → HTML (`fetch`; pakai Firecrawl hanya jika halaman dirender JavaScript atau berupa PDF sulit).
 3. **Daftarkan di `sources`:** `kind`, `authority`, `trust_score`, `config` (endpoint/slug/selector), jadwal, catatan atribusi.
 4. **Simpan fixture** (contoh respons) di `ingest/__fixtures__/` dan tulis test adapter.
-5. **Uji kering:** `bun run ingest --source=<slug> --dry-run` → cek hasil normalisasi.
+5. **Uji kering:** `POST /api/ingest/<slug>?dry_run=1` (khusus admin) → cek hasil normalisasi.
 6. **Aktifkan** → pantau 1 minggu di dashboard admin (jumlah item, error, confidence).
 
 ---

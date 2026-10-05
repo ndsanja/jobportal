@@ -1,11 +1,11 @@
 # Karir Pro — Rencana Produk & Teknis (v1)
 
 > **Status:** rencana, belum ada kode · **Tanggal:** 5 Oktober 2026
-> **Repo:** `ndsanja/jobportal` (publik) · **Supabase:** project `jobportal` (`kmytmtqidmnxtdmrmyfs`), region `ap-southeast-1` (Singapura), Postgres 17, plan Free (org `parelabs`). Saat rencana ini ditulis belum ada tabel, migrasi, maupun edge function.
+> **Repo:** `ndsanja/jobportal` (privat) · **Supabase:** project `jobportal` (`kmytmtqidmnxtdmrmyfs`), region `ap-southeast-1` (Singapura), Postgres 17, plan Free (org `parelabs`). Saat rencana ini ditulis belum ada tabel, migrasi, maupun edge function.
 
 ## 0. Ringkasan
 
-**Bisa, dan stack ini cocok.** Next.js 16 + Bun + Supabase sudah mencakup hampir semua kebutuhan Karir Pro: web app & SEO, login, database, penyimpanan dokumen, keamanan per user (RLS), cron, full-text search (konfigurasi `indonesian` & `english` sudah tersedia di project), sampai vector search untuk rekomendasi. Yang perlu ditambahkan hanya tiga: **worker crawler** (Bun/TypeScript, berjalan di GitHub Actions lalu pindah ke VPS), **AI extraction** (Claude API), dan **email** (Resend). Di tahap ini tidak perlu backend terpisah (Rust/Axum).
+**Bisa, dan stack ini cocok.** Next.js 16 + Bun + Supabase sudah mencakup hampir semua kebutuhan Karir Pro: web app & SEO, login, database, penyimpanan dokumen, keamanan per user (RLS), cron, full-text search (konfigurasi `indonesian` & `english` sudah tersedia di project), sampai vector search untuk rekomendasi. Yang perlu ditambahkan hanya tiga: **worker crawler** (Bun/TypeScript, berjalan di GitHub Actions lalu pindah ke VPS), **AI extraction** (OpenRouter/DeepSeek), dan **email** (Resend). Di tahap ini tidak perlu backend terpisah (Rust/Axum).
 
 Empat prinsip yang membuat data **cepat, akurat, dan (hampir) gratis**:
 
@@ -28,8 +28,8 @@ Empat prinsip yang membuat data **cepat, akurat, dan (hampir) gratis**:
 | Jadwal & antrian | `pg_cron` (job SQL); `pgmq` bila perlu | |
 | Notifikasi in-app | tabel `notifications` + Supabase Realtime | |
 | Rekomendasi semantik (fase lanjut) | `pgvector` 0.8 (tersedia) | |
-| Crawler / ingestion | Worker Bun di **GitHub Actions** (gratis untuk repo publik) → VPS kecil saat produksi | Edge Functions Supabase berjalan di Deno, CPU 2 detik/request, tanpa headless browser → hanya untuk tugas kecil |
-| AI | Claude API: structured outputs, input PDF/gambar, Batch API (−50%) | |
+| Crawler / ingestion | Worker Bun di **GitHub Actions** (repo privat: 2.000 menit/bulan) → VPS kecil saat produksi | Edge Functions Supabase berjalan di Deno, CPU 2 detik/request, tanpa headless browser → hanya untuk tugas kecil |
+| AI | OpenRouter (`deepseek/deepseek-v4.1-flash`), output JSON + validasi Zod | |
 | Email | Resend (gratis 3.000 email/bulan) | |
 
 **Batasan yang perlu diketahui**
@@ -211,7 +211,7 @@ jobportal/
 - `src/proxy.ts` me-refresh sesi; halaman privat dicek dengan `supabase.auth.getClaims()`.
 - `cacheComponents: true`: halaman publik (daftar, detail, kalender) memakai `"use cache"` + `cacheTag("opp:<id>")`/`cacheLife`; worker memanggil `POST /api/revalidate` (dengan secret) → `revalidateTag(tag, "max")`. Data user (rencana, readiness) dirender dinamis di dalam `<Suspense>`.
 - Di dalam scope `"use cache"` cookies tidak boleh dibaca, jadi data publik diambil dengan client Supabase tanpa sesi (publishable key).
-- Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (server/worker saja), `ANTHROPIC_API_KEY`, `ADZUNA_APP_ID`/`ADZUNA_APP_KEY`, `JOOBLE_API_KEY`, `RESEND_API_KEY`, `REVALIDATE_SECRET`. Karena repo publik, semua secret hanya disimpan di env Vercel dan GitHub Actions secrets.
+- Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (server/worker saja), `OPENROUTER_API_KEY`, `ADZUNA_APP_ID`/`ADZUNA_APP_KEY`, `JOOBLE_API_KEY`, `RESEND_API_KEY`, `REVALIDATE_SECRET`. Semua secret hanya disimpan di env Vercel dan GitHub Actions secrets.
 
 ---
 
@@ -304,20 +304,12 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 
 ---
 
-## 7. AI (Claude API)
+## 7. AI (OpenRouter)
 **Dipakai untuk:** (1) ekstraksi halaman HTML/PDF yang berubah, (2) ringkasan Bahasa Indonesia — beasiswa/program saat terbit, lowongan secara *lazy* saat dibuka/disimpan, (3) ekstraksi dokumen user (opsional, dengan izin).
 
-**Teknik:** structured outputs (JSON Schema/Zod) · `evidence` per field + validasi kutipan · prompt caching untuk system prompt & skema · **Message Batches API (−50%)** untuk backfill dan ekstraksi yang tidak mendesak · effort rendah untuk tugas rutin.
+**Teknik:** output JSON Schema + validasi Zod · `evidence` per field + validasi kutipan · retry 1× lalu review admin · model dipin per versi.
 
-**Model:** default **`claude-opus-5-5`** (akurasi tertinggi). Untuk volume besar Anda bisa memilih model yang lebih murah — itu keputusan Anda:
-
-| Model | Input / output per 1 jt token | ± per ekstraksi* | 600 ekstraksi/bulan | dengan Batch API |
-|---|---|---|---|---|
-| `claude-opus-5-5` | $4 / $20 | $0,08 | ±$48 | ±$24 |
-| `claude-sonnet-5-5` | $2 / $10 | $0,04 | ±$24 | ±$12 |
-| `claude-haiku-4-5` | $1 / $5 | $0,02 | ±$12 | ±$6 |
-
-\*Asumsi 10 ribu token input + 2 ribu token output per halaman. Sumber API/ATS/JSON-LD/CSV tidak memakai AI sama sekali.
+**Model (diputuskan):** OpenRouter **`deepseek/deepseek-v4.1-flash`** — ±$0,15 / $0,60 per 1 jt token input/output (cek ulang di OpenRouter). Untuk 600 ekstraksi/bulan (10 rb input + 2 rb output) ≈ **$1,6/bulan**. Output selalu divalidasi Zod + validator kutipan; versi model dipin dan dicatat di `extractions`. Dokumen pribadi user tidak dikirim ke model kecuali dengan persetujuan eksplisit (Fase 4). Detail di `docs/DATA-SOURCES.md` §10b.
 
 ---
 
@@ -380,12 +372,12 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 |---|---|---|
 | Supabase | Free ($0) | Pro $25/bulan (DB 8 GB, storage 100 GB, backup harian, tidak di-pause) |
 | Hosting Next.js | Vercel Hobby ($0, non-komersial) | Vercel Pro $20/bulan **atau** VPS ±$5–10/bulan |
-| Worker ingestion | GitHub Actions ($0, repo publik) | tetap, atau VPS yang sama |
-| AI | ±$5–50/bulan (tergantung model & volume) | sesuai volume |
+| Worker ingestion | GitHub Actions ($0, repo privat: 2.000 menit/bulan) | tetap, atau VPS yang sama |
+| AI (DeepSeek via OpenRouter) | ±$2–5/bulan | sesuai volume |
 | Email | Resend Free (3.000/bulan) | paket berbayar bila perlu |
 | API lowongan | Adzuna/Jooble key gratis (trial) | lisensi Adzuna (negosiasi), JSearch opsional |
 | Domain | ±Rp150–400 ribu/tahun | sama |
-| **Total** | **±$0–50/bulan** | **±$50–100/bulan** |
+| **Total** | **±$0–10/bulan** | **±$50–60/bulan** |
 
 ---
 
@@ -399,14 +391,18 @@ Evaluator (TypeScript murni di `src/domain`, diuji dengan `bun test`) menghasilk
 
 ---
 
-## 12. Keputusan yang perlu Anda ambil
-1. **Model AI** untuk ekstraksi massal: tetap `claude-opus-5-5`, atau model yang lebih murah (Sonnet 5.5 / Haiku 4.5)?
-2. **Repo publik atau privat?** Publik = GitHub Actions gratis tanpa batas, tetapi kode (termasuk daftar sumber) terlihat publik. Privat = kuota 2.000 menit/bulan, sehingga worker lebih cepat pindah ke VPS.
-3. **Hosting saat launch:** Vercel Pro atau VPS.
-4. **Siapa admin/kurator?** Antrian review butuh ±30–60 menit/hari.
-5. **Kerja sama data:** KP2MI (SISKOP2MI) dan lisensi komersial Adzuna.
-6. **Bahasa UI:** Bahasa Indonesia saja di MVP?
-7. **Domain & brand:** mis. karirpro.id / .com.
+## 12. Keputusan
+
+**Sudah diputuskan**
+- AI: OpenRouter `deepseek/deepseek-v4.1-flash`.
+- Repo **privat** → GitHub Actions 2.000 menit/bulan; anggaran job ±1.070 menit (lihat `DATA-SOURCES.md` §10a), pindah ke VPS bila mepet.
+- Admin: `ndsanja@gmail.com` (klaim `app_metadata.role = 'admin'`).
+- UI: Bahasa Indonesia.
+
+**Masih terbuka**
+1. Hosting saat launch: Vercel Pro atau VPS.
+2. Kerja sama data: KP2MI (SISKOP2MI) dan lisensi komersial Adzuna.
+3. Domain & brand: mis. karirpro.id / .com.
 
 ---
 

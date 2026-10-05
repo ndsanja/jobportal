@@ -1,0 +1,22 @@
+{
+  "jobs": [
+    {
+      "id": 4011223,
+      "title": "Senior Backend Engineer",
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/4011223",
+      "updated_at": "2026-10-01T08:30:00-04:00",
+      "location": { "name": "Berlin, Germany" },
+      "departments": [{ "name": "Engineering" }],
+      "content": "&lt;p&gt;Join our team. &lt;strong&gt;Visa sponsorship is available&lt;/strong&gt; for the right candidate.&lt;/p&gt;"
+    },
+    {
+      "id": 4011224,
+      "title": "Product Designer (Remote)",
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/4011224",
+      "updated_at": "2026-09-28T10:00:00-04:00",
+      "location": { "name": "Remote - Netherlands" },
+      "content": "&lt;p&gt;Design things.&lt;/p&gt;"
+    },
+    { "id": 4011225, "title": "Tanpa URL" }
+  ]
+}

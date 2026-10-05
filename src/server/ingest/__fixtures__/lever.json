@@ -1,0 +1,30 @@
+[
+  {
+    "id": "a1b2c3",
+    "text": "Hotel Receptionist",
+    "hostedUrl": "https://jobs.lever.co/resortco/a1b2c3",
+    "applyUrl": "https://jobs.lever.co/resortco/a1b2c3/apply",
+    "createdAt": 1759300000000,
+    "descriptionPlain": "Front desk at our resort. Working holiday visa holders welcome.",
+    "workplaceType": "onsite",
+    "categories": {
+      "location": "Cairns, QLD, Australia",
+      "team": "Front Office",
+      "commitment": "Full-time"
+    }
+  },
+  {
+    "id": "d4e5f6",
+    "text": "Customer Success Manager",
+    "hostedUrl": "https://jobs.lever.co/resortco/d4e5f6",
+    "createdAt": 1759400000000,
+    "descriptionPlain": "Work from anywhere.",
+    "workplaceType": "remote",
+    "categories": {
+      "location": "Remote",
+      "team": "Success",
+      "commitment": "Full-time"
+    }
+  },
+  { "id": "bad", "hostedUrl": "https://jobs.lever.co/resortco/bad" }
+]

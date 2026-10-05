@@ -1,0 +1,30 @@
+{
+  "jobs": [
+    {
+      "id": "7f1c",
+      "title": "Data Engineer",
+      "department": "Data",
+      "location": "Sydney",
+      "isRemote": false,
+      "isListed": true,
+      "employmentType": "FullTime",
+      "publishedAt": "2026-10-02T00:00:00.000Z",
+      "jobUrl": "https://jobs.ashbyhq.com/dataco/7f1c",
+      "descriptionPlain": "We are unable to offer visa sponsorship at this time.",
+      "address": {
+        "postalAddress": {
+          "addressCountry": "Australia",
+          "addressRegion": "New South Wales",
+          "addressLocality": "Sydney"
+        }
+      }
+    },
+    {
+      "id": "9a2d",
+      "title": "Internal Role",
+      "location": "Sydney",
+      "isListed": false,
+      "jobUrl": "https://jobs.ashbyhq.com/dataco/9a2d"
+    }
+  ]
+}

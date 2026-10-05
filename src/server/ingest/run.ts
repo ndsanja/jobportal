@@ -1,0 +1,205 @@
+import "server-only";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { Database } from "@/lib/supabase/database.types";
+import { runAdapter } from "./adapters";
+import { defaultFetch } from "./http";
+import { type PublishStats, publishItems } from "./publish";
+import type { FetchLike, IngestSource } from "./types";
+
+type SourceRow = Database["public"]["Tables"]["sources"]["Row"];
+
+const SCHEDULE_MS: Record<string, number | null> = {
+  hourly: 60 * 60 * 1000,
+  "6h": 6 * 60 * 60 * 1000,
+  "12h": 12 * 60 * 60 * 1000,
+  daily: 24 * 60 * 60 * 1000,
+  weekly: 7 * 24 * 60 * 60 * 1000,
+  monthly: 30 * 24 * 60 * 60 * 1000,
+  manual: null,
+};
+
+/** Jenis sumber yang sudah punya adapter. Jenis lain dilewati sampai adapter-nya ada. */
+const SUPPORTED_KINDS: SourceRow["kind"][] = ["api", "ats"];
+const FAILING_AFTER = 3;
+
+export type RunOptions = {
+  /** Kelompok sumber (config.group), default "jobs". Diabaikan bila `slug` diberikan. */
+  group?: string;
+  /** Jalankan satu sumber tertentu, tanpa memeriksa jadwal/status (untuk uji manual). */
+  slug?: string;
+  dryRun?: boolean;
+  /** Epoch ms; sumber berikutnya tidak dimulai setelah batas ini. */
+  deadlineMs: number;
+  fetch?: FetchLike;
+};
+
+export type SourceOutcome = {
+  slug: string;
+  status: "success" | "partial" | "failed";
+  stats?: PublishStats;
+  error?: string;
+};
+
+export type RunSummary = {
+  dryRun: boolean;
+  processed: SourceOutcome[];
+  /** Sumber jatuh tempo yang belum sempat diproses (diambil panggilan berikutnya). */
+  deferred: number;
+};
+
+function toIngestSource(row: SourceRow): IngestSource {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    kind: row.kind,
+    authority: row.authority,
+    trustScore: row.trust_score,
+    tracks: row.tracks,
+    countryCode: row.country_code,
+    attribution: row.attribution,
+    config: row.config,
+  };
+}
+
+const groupOf = (row: SourceRow): string => {
+  const config = row.config as { group?: unknown } | null;
+  return typeof config?.group === "string" ? config.group : "jobs";
+};
+
+const errorMessage = (error: unknown) =>
+  (error instanceof Error ? error.message : String(error)).slice(0, 500);
+
+export async function runDueSources(options: RunOptions): Promise<RunSummary> {
+  const db = createAdminClient();
+  const dryRun = options.dryRun ?? false;
+  const group = options.group ?? "jobs";
+  const now = new Date();
+
+  let rows: SourceRow[];
+  if (options.slug) {
+    const { data, error } = await db
+      .from("sources")
+      .select("*")
+      .eq("slug", options.slug);
+    if (error) throw new Error(`Gagal membaca sumber: ${error.message}`);
+    rows = data;
+  } else {
+    const { data, error } = await db
+      .from("sources")
+      .select("*")
+      .in("status", ["active", "failing"]) // sumber failing dicoba lagi sesuai backoff
+      .in("kind", SUPPORTED_KINDS)
+      .or(`next_run_at.is.null,next_run_at.lte.${now.toISOString()}`)
+      .order("next_run_at", { ascending: true, nullsFirst: true })
+      .limit(100);
+    if (error) throw new Error(`Gagal membaca sumber: ${error.message}`);
+    rows = data.filter(
+      (row) => groupOf(row) === group && SCHEDULE_MS[row.schedule] !== null,
+    );
+  }
+
+  const summary: RunSummary = { dryRun, processed: [], deferred: 0 };
+
+  for (const [index, row] of rows.entries()) {
+    if (Date.now() > options.deadlineMs) {
+      summary.deferred = rows.length - index;
+      break;
+    }
+    summary.processed.push(
+      await processSource(db, row, {
+        dryRun,
+        fetch: options.fetch ?? defaultFetch,
+      }),
+    );
+  }
+
+  return summary;
+}
+
+async function processSource(
+  db: ReturnType<typeof createAdminClient>,
+  row: SourceRow,
+  options: { dryRun: boolean; fetch: FetchLike },
+): Promise<SourceOutcome> {
+  const startedAt = new Date();
+  const source = toIngestSource(row);
+
+  let runId: string | null = null;
+  if (!options.dryRun) {
+    const { data } = await db
+      .from("ingest_runs")
+      .insert({ source_id: row.id, started_at: startedAt.toISOString() })
+      .select("id")
+      .single();
+    runId = data?.id ?? null;
+  }
+
+  let outcome: SourceOutcome;
+  try {
+    const result = await runAdapter(source, {
+      fetch: options.fetch,
+      env: {
+        ADZUNA_APP_ID: process.env.ADZUNA_APP_ID,
+        ADZUNA_APP_KEY: process.env.ADZUNA_APP_KEY,
+      },
+    });
+    const stats = await publishItems(db, source, result, {
+      dryRun: options.dryRun,
+      now: startedAt,
+    });
+    const mostlyBroken =
+      stats.fetched + stats.skipped > 0 &&
+      stats.skipped / (stats.fetched + stats.skipped) > 0.2;
+    outcome = {
+      slug: row.slug,
+      status: mostlyBroken ? "partial" : "success",
+      stats,
+    };
+  } catch (error) {
+    outcome = { slug: row.slug, status: "failed", error: errorMessage(error) };
+  }
+
+  if (!options.dryRun) {
+    const failed = outcome.status === "failed";
+    const failureCount = failed ? row.failure_count + 1 : 0;
+    const interval = SCHEDULE_MS[row.schedule];
+    // Setelah gagal, coba lagi paling cepat 1 jam kemudian (atau sesuai jadwal bila lebih lambat).
+    const delay = failed
+      ? Math.max(interval ?? 0, 60 * 60 * 1000)
+      : (interval ?? 0);
+
+    await db
+      .from("sources")
+      .update({
+        last_run_at: startedAt.toISOString(),
+        ...(failed ? {} : { last_success_at: startedAt.toISOString() }),
+        failure_count: failureCount,
+        status:
+          failureCount >= FAILING_AFTER
+            ? "failing"
+            : row.status === "failing" && !failed
+              ? "active"
+              : row.status,
+        next_run_at:
+          interval === null
+            ? null
+            : new Date(startedAt.getTime() + delay).toISOString(),
+      })
+      .eq("id", row.id);
+
+    if (runId) {
+      await db
+        .from("ingest_runs")
+        .update({
+          finished_at: new Date().toISOString(),
+          status: outcome.status,
+          stats: (outcome.stats ?? {}) as never,
+          error: outcome.error ?? null,
+        })
+        .eq("id", runId);
+    }
+  }
+
+  return outcome;
+}

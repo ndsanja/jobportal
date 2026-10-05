@@ -89,6 +89,369 @@ export type Database = {
         };
         Relationships: [];
       };
+      ingest_runs: {
+        Row: {
+          error: string | null;
+          finished_at: string | null;
+          id: string;
+          source_id: string;
+          started_at: string;
+          stats: Json;
+          status: string;
+        };
+        Insert: {
+          error?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          source_id: string;
+          started_at?: string;
+          stats?: Json;
+          status?: string;
+        };
+        Update: {
+          error?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          source_id?: string;
+          started_at?: string;
+          stats?: Json;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ingest_runs_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      opportunities: {
+        Row: {
+          apply_url: string;
+          attributes: Json;
+          category: string | null;
+          city: string | null;
+          closes_at: string | null;
+          confidence: number;
+          country_code: string | null;
+          created_at: string;
+          dedupe_key: string;
+          employment_type: string | null;
+          first_seen_at: string;
+          funding: string | null;
+          id: string;
+          is_published: boolean;
+          is_remote: boolean;
+          is_rolling: boolean;
+          kind: Database["public"]["Enums"]["opportunity_kind"];
+          last_seen_at: string;
+          last_verified_at: string;
+          official_url: string | null;
+          opens_at: string | null;
+          organization_id: string | null;
+          postcode: string | null;
+          published_at: string | null;
+          region: string | null;
+          salary_currency: string | null;
+          salary_max: number | null;
+          salary_min: number | null;
+          salary_period: string | null;
+          search: unknown;
+          slug: string;
+          status: Database["public"]["Enums"]["opportunity_status"];
+          study_levels: string[];
+          summary: string | null;
+          title: string;
+          tracks: Database["public"]["Enums"]["track"][];
+          updated_at: string;
+          verification_status: Database["public"]["Enums"]["verification_status"];
+        };
+        Insert: {
+          apply_url: string;
+          attributes?: Json;
+          category?: string | null;
+          city?: string | null;
+          closes_at?: string | null;
+          confidence?: number;
+          country_code?: string | null;
+          created_at?: string;
+          dedupe_key: string;
+          employment_type?: string | null;
+          first_seen_at?: string;
+          funding?: string | null;
+          id?: string;
+          is_published?: boolean;
+          is_remote?: boolean;
+          is_rolling?: boolean;
+          kind: Database["public"]["Enums"]["opportunity_kind"];
+          last_seen_at?: string;
+          last_verified_at?: string;
+          official_url?: string | null;
+          opens_at?: string | null;
+          organization_id?: string | null;
+          postcode?: string | null;
+          published_at?: string | null;
+          region?: string | null;
+          salary_currency?: string | null;
+          salary_max?: number | null;
+          salary_min?: number | null;
+          salary_period?: string | null;
+          search?: unknown;
+          slug: string;
+          status?: Database["public"]["Enums"]["opportunity_status"];
+          study_levels?: string[];
+          summary?: string | null;
+          title: string;
+          tracks?: Database["public"]["Enums"]["track"][];
+          updated_at?: string;
+          verification_status?: Database["public"]["Enums"]["verification_status"];
+        };
+        Update: {
+          apply_url?: string;
+          attributes?: Json;
+          category?: string | null;
+          city?: string | null;
+          closes_at?: string | null;
+          confidence?: number;
+          country_code?: string | null;
+          created_at?: string;
+          dedupe_key?: string;
+          employment_type?: string | null;
+          first_seen_at?: string;
+          funding?: string | null;
+          id?: string;
+          is_published?: boolean;
+          is_remote?: boolean;
+          is_rolling?: boolean;
+          kind?: Database["public"]["Enums"]["opportunity_kind"];
+          last_seen_at?: string;
+          last_verified_at?: string;
+          official_url?: string | null;
+          opens_at?: string | null;
+          organization_id?: string | null;
+          postcode?: string | null;
+          published_at?: string | null;
+          region?: string | null;
+          salary_currency?: string | null;
+          salary_max?: number | null;
+          salary_min?: number | null;
+          salary_period?: string | null;
+          search?: unknown;
+          slug?: string;
+          status?: Database["public"]["Enums"]["opportunity_status"];
+          study_levels?: string[];
+          summary?: string | null;
+          title?: string;
+          tracks?: Database["public"]["Enums"]["track"][];
+          updated_at?: string;
+          verification_status?: Database["public"]["Enums"]["verification_status"];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_country_code_fkey";
+            columns: ["country_code"];
+            isOneToOne: false;
+            referencedRelation: "countries";
+            referencedColumns: ["code"];
+          },
+          {
+            foreignKeyName: "opportunities_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      opportunity_changes: {
+        Row: {
+          changed_at: string;
+          field: string;
+          id: string;
+          new_value: Json | null;
+          old_value: Json | null;
+          opportunity_id: string;
+          source_id: string | null;
+        };
+        Insert: {
+          changed_at?: string;
+          field: string;
+          id?: string;
+          new_value?: Json | null;
+          old_value?: Json | null;
+          opportunity_id: string;
+          source_id?: string | null;
+        };
+        Update: {
+          changed_at?: string;
+          field?: string;
+          id?: string;
+          new_value?: Json | null;
+          old_value?: Json | null;
+          opportunity_id?: string;
+          source_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_changes_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "opportunity_changes_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      opportunity_events: {
+        Row: {
+          created_at: string;
+          date_precision: string;
+          ends_on: string | null;
+          id: string;
+          is_estimated: boolean;
+          kind: string;
+          opportunity_id: string;
+          source_url: string | null;
+          starts_on: string;
+        };
+        Insert: {
+          created_at?: string;
+          date_precision?: string;
+          ends_on?: string | null;
+          id?: string;
+          is_estimated?: boolean;
+          kind: string;
+          opportunity_id: string;
+          source_url?: string | null;
+          starts_on: string;
+        };
+        Update: {
+          created_at?: string;
+          date_precision?: string;
+          ends_on?: string | null;
+          id?: string;
+          is_estimated?: boolean;
+          kind?: string;
+          opportunity_id?: string;
+          source_url?: string | null;
+          starts_on?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_events_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      opportunity_sources: {
+        Row: {
+          external_id: string;
+          first_seen_at: string;
+          id: string;
+          is_primary: boolean;
+          last_seen_at: string;
+          opportunity_id: string;
+          source_id: string;
+          source_url: string;
+        };
+        Insert: {
+          external_id: string;
+          first_seen_at?: string;
+          id?: string;
+          is_primary?: boolean;
+          last_seen_at?: string;
+          opportunity_id: string;
+          source_id: string;
+          source_url: string;
+        };
+        Update: {
+          external_id?: string;
+          first_seen_at?: string;
+          id?: string;
+          is_primary?: boolean;
+          last_seen_at?: string;
+          opportunity_id?: string;
+          source_id?: string;
+          source_url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_sources_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "opportunity_sources_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organizations: {
+        Row: {
+          country_code: string | null;
+          created_at: string;
+          id: string;
+          kind: string;
+          logo_url: string | null;
+          name: string;
+          normalized_name: string;
+          slug: string;
+          updated_at: string;
+          verification: Json;
+          website: string | null;
+        };
+        Insert: {
+          country_code?: string | null;
+          created_at?: string;
+          id?: string;
+          kind?: string;
+          logo_url?: string | null;
+          name: string;
+          normalized_name: string;
+          slug: string;
+          updated_at?: string;
+          verification?: Json;
+          website?: string | null;
+        };
+        Update: {
+          country_code?: string | null;
+          created_at?: string;
+          id?: string;
+          kind?: string;
+          logo_url?: string | null;
+          name?: string;
+          normalized_name?: string;
+          slug?: string;
+          updated_at?: string;
+          verification?: Json;
+          website?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organizations_country_code_fkey";
+            columns: ["country_code"];
+            isOneToOne: false;
+            referencedRelation: "countries";
+            referencedColumns: ["code"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           birth_date: string | null;
@@ -139,6 +502,50 @@ export type Database = {
           years_experience?: number | null;
         };
         Relationships: [];
+      };
+      source_pages: {
+        Row: {
+          content_hash: string | null;
+          etag: string | null;
+          id: string;
+          last_changed_at: string | null;
+          last_fetched_at: string | null;
+          last_modified: string | null;
+          snapshot_path: string | null;
+          source_id: string;
+          url: string;
+        };
+        Insert: {
+          content_hash?: string | null;
+          etag?: string | null;
+          id?: string;
+          last_changed_at?: string | null;
+          last_fetched_at?: string | null;
+          last_modified?: string | null;
+          snapshot_path?: string | null;
+          source_id: string;
+          url: string;
+        };
+        Update: {
+          content_hash?: string | null;
+          etag?: string | null;
+          id?: string;
+          last_changed_at?: string | null;
+          last_fetched_at?: string | null;
+          last_modified?: string | null;
+          snapshot_path?: string | null;
+          source_id?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "source_pages_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       sources: {
         Row: {
@@ -243,9 +650,12 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      close_expired_opportunities: { Args: never; Returns: number };
       is_admin: { Args: never; Returns: boolean };
     };
     Enums: {
+      opportunity_kind: "job" | "scholarship" | "program";
+      opportunity_status: "upcoming" | "open" | "closed" | "archived";
       source_authority:
         | "government"
         | "institution"
@@ -262,6 +672,11 @@ export type Database = {
         | "deeplink";
       source_status: "active" | "paused" | "failing" | "draft";
       track: "whv_au" | "dama_au" | "professional" | "overseas" | "scholarship";
+      verification_status:
+        | "verified"
+        | "aggregated"
+        | "needs_review"
+        | "community";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -296,6 +711,8 @@ export type Enums<EnumName extends keyof DefaultSchema["Enums"]> =
 export const Constants = {
   public: {
     Enums: {
+      opportunity_kind: ["job", "scholarship", "program"],
+      opportunity_status: ["upcoming", "open", "closed", "archived"],
       source_authority: [
         "government",
         "institution",
@@ -314,6 +731,12 @@ export const Constants = {
       ],
       source_status: ["active", "paused", "failing", "draft"],
       track: ["whv_au", "dama_au", "professional", "overseas", "scholarship"],
+      verification_status: [
+        "verified",
+        "aggregated",
+        "needs_review",
+        "community",
+      ],
     },
   },
 } as const;

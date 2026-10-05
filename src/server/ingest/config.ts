@@ -1,0 +1,46 @@
+import { z } from "zod";
+
+const countryCode = z
+  .string()
+  .length(2)
+  .transform((value) => value.toUpperCase());
+
+const atsBase = z.object({
+  token: z.string().min(1),
+  company: z.string().min(1),
+  default_country: countryCode.optional(),
+  group: z.string().default("jobs"),
+});
+
+export const sourceConfigSchema = z.discriminatedUnion("provider", [
+  atsBase.extend({ provider: z.literal("greenhouse") }),
+  atsBase.extend({ provider: z.literal("lever") }),
+  atsBase.extend({ provider: z.literal("ashby") }),
+  z.object({
+    provider: z.literal("adzuna"),
+    group: z.string().default("jobs"),
+    country: z
+      .string()
+      .length(2)
+      .transform((value) => value.toLowerCase()),
+    default_country: countryCode,
+    pages: z.number().int().min(1).max(5).default(1),
+    results_per_page: z.number().int().min(10).max(50).default(50),
+    queries: z
+      .array(
+        z.object({
+          what: z.string().min(1),
+          where: z.string().min(1).optional(),
+        }),
+      )
+      .min(1)
+      .max(40),
+  }),
+]);
+
+export type SourceConfig = z.infer<typeof sourceConfigSchema>;
+export type AtsConfig = Extract<
+  SourceConfig,
+  { provider: "greenhouse" | "lever" | "ashby" }
+>;
+export type AdzunaConfig = Extract<SourceConfig, { provider: "adzuna" }>;

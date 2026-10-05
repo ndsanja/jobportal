@@ -1,0 +1,47 @@
+{
+  "count": 3,
+  "results": [
+    {
+      "id": "5012345678",
+      "title": "Fruit Picker - Working Holiday Welcome",
+      "description": "Seasonal harvest work in Bundaberg. Backpackers and 88 days regional work welcome.",
+      "created": "2026-10-03T22:10:11Z",
+      "redirect_url": "https://www.adzuna.com.au/land/ad/5012345678?se=abc",
+      "company": { "display_name": "Sunrise Orchards Pty Ltd" },
+      "location": {
+        "display_name": "Bundaberg, QLD",
+        "area": ["Australia", "Queensland", "Bundaberg"]
+      },
+      "salary_min": 52000,
+      "salary_max": 58000,
+      "salary_is_predicted": "0",
+      "contract_time": "part_time",
+      "category": { "label": "Agriculture Jobs" }
+    },
+    {
+      "id": "5012345679",
+      "title": "Kitchen Hand",
+      "description": "Busy restaurant.",
+      "created": "2026-10-04T01:00:00Z",
+      "redirect_url": "https://www.adzuna.com.au/land/ad/5012345679",
+      "company": { "display_name": "Harbour Kitchen" },
+      "location": {
+        "display_name": "Cairns, QLD",
+        "area": ["Australia", "Queensland", "Cairns"]
+      },
+      "salary_min": 48000,
+      "salary_max": 48000,
+      "salary_is_predicted": "1"
+    },
+    {
+      "id": "5012345680",
+      "title": "Cleaner",
+      "description": "No company listed.",
+      "redirect_url": "https://www.adzuna.com.au/land/ad/5012345680",
+      "location": {
+        "display_name": "Perth",
+        "area": ["Australia", "Western Australia", "Perth"]
+      }
+    }
+  ]
+}

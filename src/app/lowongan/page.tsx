@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { VerificationBadge } from "@/components/verification-badge";
+import { WNI_LABEL, type WniLevel } from "@/domain/job-insight";
 import { displayState } from "@/domain/opportunity";
 import { readAttributes, signalLabels } from "@/lib/attributes";
 import { formatDate } from "@/lib/format";
+import { WNI_TONE } from "@/lib/labels";
 import { Constants } from "@/lib/supabase/database.types";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -39,12 +41,14 @@ export default async function LowonganPage({
     ? first(params.negara)?.toUpperCase()
     : undefined;
   const page = Math.max(1, Number.parseInt(first(params.page) ?? "1", 10) || 1);
+  // Hanya lowongan yang menurut penilaian AI (berkutipan) realistis untuk pelamar WNI.
+  const wniOnly = first(params.wni) === "1";
 
   const supabase = createPublicClient();
   let query = supabase
     .from("opportunities")
     .select(
-      "slug, title, city, region, country_code, is_remote, employment_type, kind, status, verification_status, last_verified_at, closes_at, attributes, organizations(name)",
+      `slug, title, city, region, country_code, is_remote, employment_type, kind, status, verification_status, last_verified_at, closes_at, attributes, organizations(name), ${wniOnly ? "opportunity_insights!inner(wni)" : "opportunity_insights(wni)"}`,
       { count: "exact" },
     )
     .in("kind", ["job", "program"]) // beasiswa punya halaman sendiri di /beasiswa
@@ -59,6 +63,8 @@ export default async function LowonganPage({
     });
   if (track) query = query.contains("tracks", [track]);
   if (country) query = query.eq("country_code", country);
+  if (wniOnly)
+    query = query.in("opportunity_insights.wni", ["likely", "possible"]);
 
   const { data, count, error } = await query;
   if (error) throw new Error(`Gagal memuat lowongan: ${error.message}`);
@@ -69,7 +75,14 @@ export default async function LowonganPage({
 
   const href = (overrides: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
-    const merged = { q, track, negara: country, page: undefined, ...overrides };
+    const merged = {
+      q,
+      track,
+      negara: country,
+      wni: wniOnly ? "1" : undefined,
+      page: undefined,
+      ...overrides,
+    };
     for (const [key, value] of Object.entries(merged))
       if (value) next.set(key, value);
     const qs = next.toString();
@@ -123,6 +136,18 @@ export default async function LowonganPage({
           ))}
         </nav>
 
+        <p className="mt-3">
+          <Link
+            href={href({ wni: wniOnly ? undefined : "1" })}
+            className={`inline-flex rounded-full border px-3 py-1 text-sm ${wniOnly ? "border-emerald-700 bg-emerald-700 text-white" : "border-zinc-300 dark:border-zinc-700"}`}
+          >
+            {wniOnly ? "✓ " : ""}Hanya yang bisa untuk WNI
+          </Link>
+          <span className="ml-2 text-xs text-zinc-500">
+            dinilai AI dari teks iklan; alasan tegas selalu berkutipan
+          </span>
+        </p>
+
         <p className="mt-6 text-sm text-zinc-500">
           {total.toLocaleString("id-ID")} lowongan
         </p>
@@ -162,6 +187,20 @@ export default async function LowonganPage({
                       {job.country_code ? ` · ${job.country_code}` : ""}
                     </p>
                     <p className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500">
+                      {(() => {
+                        const insight = (
+                          job.opportunity_insights as unknown as {
+                            wni: WniLevel;
+                          } | null
+                        )?.wni;
+                        return insight && insight !== "unknown" ? (
+                          <span
+                            className={`rounded px-2 py-0.5 font-medium ${WNI_TONE[insight]}`}
+                          >
+                            {WNI_LABEL[insight]}
+                          </span>
+                        ) : null;
+                      })()}
                       {signalLabels(readAttributes(job.attributes)).map(
                         (label) => (
                           <span

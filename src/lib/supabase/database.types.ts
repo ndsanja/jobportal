@@ -703,6 +703,91 @@ export type Database = {
           },
         ];
       };
+      opportunity_insights: {
+        Row: {
+          created_at: string;
+          model: string | null;
+          opportunity_id: string;
+          pathways: string[];
+          prompt_version: string | null;
+          reasons: Json;
+          requirements: Json;
+          requires_local_work_rights: boolean | null;
+          sponsorship: string;
+          summary: string | null;
+          text_hash: string;
+          updated_at: string;
+          wni: string;
+        };
+        Insert: {
+          created_at?: string;
+          model?: string | null;
+          opportunity_id: string;
+          pathways?: string[];
+          prompt_version?: string | null;
+          reasons?: Json;
+          requirements?: Json;
+          requires_local_work_rights?: boolean | null;
+          sponsorship?: string;
+          summary?: string | null;
+          text_hash: string;
+          updated_at?: string;
+          wni: string;
+        };
+        Update: {
+          created_at?: string;
+          model?: string | null;
+          opportunity_id?: string;
+          pathways?: string[];
+          prompt_version?: string | null;
+          reasons?: Json;
+          requirements?: Json;
+          requires_local_work_rights?: boolean | null;
+          sponsorship?: string;
+          summary?: string | null;
+          text_hash?: string;
+          updated_at?: string;
+          wni?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_insights_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: true;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      opportunity_texts: {
+        Row: {
+          opportunity_id: string;
+          text: string;
+          text_hash: string;
+          updated_at: string;
+        };
+        Insert: {
+          opportunity_id: string;
+          text: string;
+          text_hash: string;
+          updated_at?: string;
+        };
+        Update: {
+          opportunity_id?: string;
+          text?: string;
+          text_hash?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_texts_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: true;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       opportunity_sources: {
         Row: {
           external_id: string;

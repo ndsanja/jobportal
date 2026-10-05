@@ -299,6 +299,31 @@ export async function publishItems(
         "Gagal menyimpan riwayat perubahan",
       );
     }
+
+    // Teks iklan disimpan privat (tidak ditampilkan) untuk penilaian AI kelayakan WNI.
+    const texts: TablesInsert<"opportunity_texts">[] = prepared.flatMap(
+      ({ key, item }) => {
+        const opportunityId = idByKey.get(key);
+        const text = item.descriptionText.trim().slice(0, 20_000);
+        if (!opportunityId || text.length < 40) return [];
+        return [
+          {
+            opportunity_id: opportunityId,
+            text,
+            text_hash: sha1(`${item.title}\n${text}`, 40),
+            updated_at: nowIso,
+          },
+        ];
+      },
+    );
+    for (const part of chunk(texts)) {
+      must(
+        await db
+          .from("opportunity_texts")
+          .upsert(part, { onConflict: "opportunity_id" }),
+        "Gagal menyimpan teks iklan",
+      );
+    }
     return idByKey;
   }
 

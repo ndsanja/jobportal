@@ -88,6 +88,15 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     closed_refresh_days: z.number().int().min(1).max(180).default(30),
   }),
   z.object({
+    /** Penilaian AI per lowongan: kelayakan WNI, jalur visa, syarat kunci (berkutipan dari iklan). */
+    provider: z.literal("job_enrichment"),
+    group: z.string().default("enrich"),
+    batch_size: z.number().int().min(1).max(12).default(8),
+    max_jobs: z.number().int().min(1).max(200).default(48),
+    concurrency: z.number().int().min(1).max(5).default(3),
+    text_chars: z.number().int().min(500).max(8000).default(3000),
+  }),
+  z.object({
     /** Agen penemu: mencari peluang BARU di web dan mengantrekannya untuk admin. */
     provider: z.literal("discovery_agent"),
     group: z.string().default("discovery"),

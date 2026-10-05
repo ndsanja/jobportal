@@ -7,6 +7,13 @@ import { ClaimsPanel } from "@/components/claims-panel";
 import { EventsList } from "@/components/events-list";
 import { QualityBadge } from "@/components/quality-badge";
 import { VerificationBadge } from "@/components/verification-badge";
+import {
+  PATHWAY_LABEL,
+  type Pathway,
+  type QuotedText,
+  WNI_LABEL,
+  type WniLevel,
+} from "@/domain/job-insight";
 import { displayState } from "@/domain/opportunity";
 import { dataQuality } from "@/domain/quality";
 import { readAttributes, signalLabels } from "@/lib/attributes";
@@ -17,6 +24,7 @@ import {
   formatSalary,
   hostnameOf,
 } from "@/lib/format";
+import { WNI_TONE } from "@/lib/labels";
 import { createPublicClient } from "@/lib/supabase/public";
 
 async function loadOpportunity(slug: string) {
@@ -68,6 +76,13 @@ export default async function LowonganDetailPage({
           .then(({ data }) => data ?? []),
       ])
     : [[], null, []];
+  const { data: insight } = await supabase
+    .from("opportunity_insights")
+    .select(
+      "wni, reasons, pathways, requirements, summary, sponsorship, updated_at",
+    )
+    .eq("opportunity_id", job.id)
+    .maybeSingle();
   const [sources, changes] = await Promise.all([
     supabase
       .from("opportunity_sources")
@@ -176,6 +191,74 @@ export default async function LowonganDetailPage({
             attributes.research?.deadline_precision,
           )}
         </p>
+      )}
+
+      {insight && (
+        <section className="mt-8 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-medium">Untuk pelamar dari Indonesia</h2>
+            <span
+              className={`rounded px-2 py-0.5 text-xs font-medium ${WNI_TONE[insight.wni as WniLevel] ?? ""}`}
+            >
+              {WNI_LABEL[insight.wni as WniLevel] ?? insight.wni}
+            </span>
+          </div>
+          {insight.summary && (
+            <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+              {insight.summary}
+            </p>
+          )}
+          {(insight.reasons as QuotedText[]).length > 0 && (
+            <ul className="mt-3 space-y-2 text-sm">
+              {(insight.reasons as QuotedText[]).map((reason) => (
+                <li key={reason.text}>
+                  {reason.text}
+                  {reason.quote && (
+                    <blockquote className="mt-1 border-l-2 border-zinc-300 pl-3 text-xs italic text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+                      menurut iklan: “{reason.quote}”
+                    </blockquote>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {insight.pathways.length > 0 && (
+            <p className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="text-zinc-500">Jalur yang relevan:</span>
+              {insight.pathways.map((pathway) => (
+                <span
+                  key={pathway}
+                  className="rounded bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800"
+                >
+                  {PATHWAY_LABEL[pathway as Pathway] ?? pathway}
+                </span>
+              ))}
+            </p>
+          )}
+          {(insight.requirements as QuotedText[]).length > 0 && (
+            <div className="mt-3 text-sm">
+              <p className="text-xs text-zinc-500">Syarat kunci dari iklan</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5">
+                {(insight.requirements as QuotedText[]).map((req) => (
+                  <li key={req.text}>
+                    {req.text}
+                    {req.quote && (
+                      <span className="text-xs italic text-zinc-500">
+                        {" "}
+                        — “{req.quote}”
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="mt-3 text-xs text-zinc-500">
+            Dinilai AI dari teks iklan pada {formatDate(insight.updated_at)}.
+            Kesimpulan tegas hanya diberikan bila ada kutipan dari iklan. Selalu
+            baca iklan asli dan cek syarat visa di situs resmi pemerintah.
+          </p>
+        </section>
       )}
 
       {job.summary && (

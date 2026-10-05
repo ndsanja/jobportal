@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
+import { type DiscoveryStats, runDiscovery } from "@/server/discovery/agent";
 import { type ResearchStats, runResearch } from "@/server/research/agent";
 import {
   type OpportunityResearchStats,
@@ -52,7 +53,8 @@ export type SourceOutcome = {
     | PublishStats
     | MonitorStats
     | ResearchStats
-    | OpportunityResearchStats;
+    | OpportunityResearchStats
+    | DiscoveryStats;
   error?: string;
 };
 
@@ -191,6 +193,12 @@ async function processSource(
       let failed = false;
       if (provider === "research_agent") {
         stats = await runResearch(db, source, deps, researchOptions);
+      } else if (provider === "discovery_agent") {
+        stats = await runDiscovery(db, source, deps, {
+          dryRun: options.dryRun,
+          now: startedAt,
+          deadlineMs: options.deadlineMs,
+        });
       } else if (provider === "opportunity_research") {
         const result = await runOpportunityResearch(db, source, deps, {
           ...researchOptions,

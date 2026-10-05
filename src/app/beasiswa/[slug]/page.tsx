@@ -4,13 +4,14 @@ import { notFound } from "next/navigation";
 import { AddToPlanButton } from "@/components/add-to-plan";
 import { BriefPanel } from "@/components/brief-panel";
 import { ClaimsPanel } from "@/components/claims-panel";
+import { EventsList } from "@/components/events-list";
 import { SiteHeader } from "@/components/site-header";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
 import { readAttributes } from "@/lib/attributes";
 import { loadBrief, loadClaims } from "@/lib/claims-query";
 import { formatDate, formatDeadline } from "@/lib/format";
-import { EVENT_KIND_LABEL, EVENT_KIND_TONE, levelsLabel } from "@/lib/labels";
+import { levelsLabel } from "@/lib/labels";
 import { createPublicClient } from "@/lib/supabase/public";
 
 async function load(slug: string) {
@@ -165,45 +166,7 @@ export default async function BeasiswaDetailPage({
           </p>
         )}
 
-        {(events ?? []).length > 0 && (
-          <section className="mt-8">
-            <h2 className="font-medium">Jadwal</h2>
-            <ul className="mt-3 space-y-2 text-sm">
-              {(events ?? []).map((event) => (
-                <li
-                  key={event.id}
-                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1"
-                >
-                  <span
-                    className={`rounded px-2 py-0.5 text-xs font-medium ${EVENT_KIND_TONE[event.kind] ?? "bg-zinc-100 dark:bg-zinc-800"}`}
-                  >
-                    {EVENT_KIND_LABEL[event.kind] ?? event.kind}
-                  </span>
-                  <span>
-                    {formatDate(event.starts_on)}
-                    {event.ends_on ? ` – ${formatDate(event.ends_on)}` : ""}
-                    {event.is_estimated ? " (perkiraan)" : ""}
-                  </span>
-                  {event.label && (
-                    <span className="text-zinc-600 dark:text-zinc-400">
-                      {event.label}
-                    </span>
-                  )}
-                  {event.source_url && (
-                    <a
-                      href={event.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer nofollow"
-                      className="text-xs text-zinc-500 underline underline-offset-4"
-                    >
-                      sumber ↗
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+        <EventsList events={events ?? []} />
 
         <section className="mt-8">
           <h2 className="font-medium">Syarat & panduan</h2>

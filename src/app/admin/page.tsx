@@ -11,7 +11,7 @@ export default async function AdminPage() {
   await requireAdmin();
   const supabase = await createClient();
 
-  const [sources, countries, documentTypes, pending, opportunities] =
+  const [sources, countries, documentTypes, pending, opportunities, found] =
     await Promise.all([
       supabase.from("sources").select("id", { count: "exact", head: true }),
       supabase.from("countries").select("code", { count: "exact", head: true }),
@@ -25,11 +25,16 @@ export default async function AdminPage() {
       supabase
         .from("opportunities")
         .select("id", { count: "exact", head: true }),
+      supabase
+        .from("discovery_candidates")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
     ]);
 
   const stats = [
     { label: "Peluang", value: opportunities.count ?? 0 },
     { label: "Menunggu review", value: pending.count ?? 0 },
+    { label: "Temuan baru", value: found.count ?? 0 },
     { label: "Sumber data", value: sources.count ?? 0 },
     { label: "Negara", value: countries.count ?? 0 },
     { label: "Jenis dokumen", value: documentTypes.count ?? 0 },
@@ -64,6 +69,14 @@ export default async function AdminPage() {
             className="font-medium underline underline-offset-4"
           >
             Antrean review ekstraksi ({pending.count ?? 0}) →
+          </Link>
+        </li>
+        <li>
+          <Link
+            href="/admin/temuan"
+            className="font-medium underline underline-offset-4"
+          >
+            Temuan agen penemu ({found.count ?? 0}) →
           </Link>
         </li>
         <li>

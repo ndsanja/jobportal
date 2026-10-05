@@ -2,10 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AddToPlanButton } from "@/components/add-to-plan";
+import { BriefPanel } from "@/components/brief-panel";
+import { ClaimsPanel } from "@/components/claims-panel";
+import { EventsList } from "@/components/events-list";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
 import { readAttributes, signalLabels } from "@/lib/attributes";
-import { formatDate, formatSalary, hostnameOf } from "@/lib/format";
+import { loadBrief, loadClaims } from "@/lib/claims-query";
+import {
+  formatDate,
+  formatDeadline,
+  formatSalary,
+  hostnameOf,
+} from "@/lib/format";
 import { createPublicClient } from "@/lib/supabase/public";
 
 async function loadOpportunity(slug: string) {
@@ -41,6 +50,22 @@ export default async function LowonganDetailPage({
   if (job.kind === "scholarship") redirect(`/beasiswa/${job.slug}`);
 
   const supabase = createPublicClient();
+  // Program kerja resmi (G2G, pemagangan, dsb.) diriset otomatis: tampilkan panduan & bukti.
+  const isProgram = job.kind === "program";
+  const [claims, brief, events] = isProgram
+    ? await Promise.all([
+        loadClaims({ opportunityId: job.id }),
+        loadBrief({ opportunityId: job.id }),
+        supabase
+          .from("opportunity_events")
+          .select(
+            "id, kind, label, starts_on, ends_on, is_estimated, source_url",
+          )
+          .eq("opportunity_id", job.id)
+          .order("starts_on")
+          .then(({ data }) => data ?? []),
+      ])
+    : [[], null, []];
   const [sources, changes] = await Promise.all([
     supabase
       .from("opportunity_sources")
@@ -120,6 +145,22 @@ export default async function LowonganDetailPage({
         </p>
       )}
 
+      {isProgram && attributes.research?.eligible_wni === false && (
+        <p className="mt-5 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-900 dark:bg-red-950 dark:text-red-100">
+          ✗ Menurut sumber resmi, program ini tidak terbuka untuk pemegang
+          paspor Indonesia.
+        </p>
+      )}
+      {isProgram && job.closes_at && state !== "closed" && (
+        <p className="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+          ⏳ Tenggat{" "}
+          {formatDeadline(
+            job.closes_at,
+            attributes.research?.deadline_precision,
+          )}
+        </p>
+      )}
+
       {job.summary && (
         <section className="mt-8">
           <h2 className="font-medium">Ringkasan</h2>
@@ -130,6 +171,23 @@ export default async function LowonganDetailPage({
             Ringkasan singkat dari iklan; baca iklan lengkap di sumber resmi.
           </p>
         </section>
+      )}
+
+      {isProgram && (
+        <>
+          <EventsList events={events} />
+          <section className="mt-8">
+            <h2 className="font-medium">Syarat & panduan</h2>
+            <div className="mt-3">
+              {brief && (
+                <div className="mb-8">
+                  <BriefPanel brief={brief} claims={claims} />
+                </div>
+              )}
+              <ClaimsPanel claims={claims} />
+            </div>
+          </section>
+        </>
       )}
 
       <div className="mt-8">

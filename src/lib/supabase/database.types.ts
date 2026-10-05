@@ -210,6 +210,135 @@ export type Database = {
         };
         Relationships: [];
       };
+      discovery_candidates: {
+        Row: {
+          country_code: string | null;
+          deadline: string | null;
+          evidence: Json;
+          first_seen_at: string;
+          id: string;
+          kind: Database["public"]["Enums"]["opportunity_kind"];
+          last_seen_at: string;
+          levels: string[];
+          link_verified: boolean;
+          model: string | null;
+          name: string;
+          name_key: string;
+          official_url: string | null;
+          open_to_indonesia: string;
+          opportunity_id: string | null;
+          organizer: string | null;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          score: number;
+          seen_count: number;
+          source_id: string | null;
+          status: string;
+          summary: string | null;
+        };
+        Insert: {
+          country_code?: string | null;
+          deadline?: string | null;
+          evidence?: Json;
+          first_seen_at?: string;
+          id?: string;
+          kind: Database["public"]["Enums"]["opportunity_kind"];
+          last_seen_at?: string;
+          levels?: string[];
+          link_verified?: boolean;
+          model?: string | null;
+          name: string;
+          name_key: string;
+          official_url?: string | null;
+          open_to_indonesia?: string;
+          opportunity_id?: string | null;
+          organizer?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          score?: number;
+          seen_count?: number;
+          source_id?: string | null;
+          status?: string;
+          summary?: string | null;
+        };
+        Update: {
+          country_code?: string | null;
+          deadline?: string | null;
+          evidence?: Json;
+          first_seen_at?: string;
+          id?: string;
+          kind?: Database["public"]["Enums"]["opportunity_kind"];
+          last_seen_at?: string;
+          levels?: string[];
+          link_verified?: boolean;
+          model?: string | null;
+          name?: string;
+          name_key?: string;
+          official_url?: string | null;
+          open_to_indonesia?: string;
+          opportunity_id?: string | null;
+          organizer?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          score?: number;
+          seen_count?: number;
+          source_id?: string | null;
+          status?: string;
+          summary?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_candidates_country_code_fkey";
+            columns: ["country_code"];
+            isOneToOne: false;
+            referencedRelation: "countries";
+            referencedColumns: ["code"];
+          },
+          {
+            foreignKeyName: "discovery_candidates_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_candidates_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_pages: {
+        Row: {
+          content_hash: string;
+          last_fetched_at: string;
+          source_id: string | null;
+          url: string;
+        };
+        Insert: {
+          content_hash: string;
+          last_fetched_at?: string;
+          source_id?: string | null;
+          url: string;
+        };
+        Update: {
+          content_hash?: string;
+          last_fetched_at?: string;
+          source_id?: string | null;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_pages_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       document_types: {
         Row: {
           category: string;

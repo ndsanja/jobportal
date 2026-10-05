@@ -88,6 +88,31 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     closed_refresh_days: z.number().int().min(1).max(180).default(30),
   }),
   z.object({
+    /** Agen penemu: mencari peluang BARU di web dan mengantrekannya untuk admin. */
+    provider: z.literal("discovery_agent"),
+    group: z.string().default("discovery"),
+    target: z.enum(["scholarship", "program"]),
+    queries: z
+      .array(
+        z.union([
+          z.string().min(5).max(200),
+          z.object({
+            q: z.string().min(5).max(200),
+            recency: z.enum(["day", "week", "month", "year"]).optional(),
+          }),
+        ]),
+      )
+      .min(1)
+      .max(40),
+    /** Kueri digilir: tiap run memakai sebagian (hemat biaya, cakupan luas dari waktu ke waktu). */
+    queries_per_run: z.number().int().min(1).max(10).default(4),
+    results_per_query: z.number().int().min(1).max(10).default(6),
+    max_pages: z.number().int().min(1).max(15).default(8),
+    max_chars: z.number().int().min(5000).max(120000).default(40000),
+    /** Maksimum tautan resmi kandidat baru yang diperiksa per run. */
+    verify_links: z.number().int().min(0).max(25).default(12),
+  }),
+  z.object({
     provider: z.literal("adzuna"),
     group: z.string().default("jobs"),
     country: z
@@ -118,6 +143,10 @@ export type AdzunaConfig = Extract<SourceConfig, { provider: "adzuna" }>;
 export type ResearchAgentConfig = Extract<
   SourceConfig,
   { provider: "research_agent" }
+>;
+export type DiscoveryAgentConfig = Extract<
+  SourceConfig,
+  { provider: "discovery_agent" }
 >;
 export type PageMonitorConfig = Extract<
   SourceConfig,

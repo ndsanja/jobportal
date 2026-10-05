@@ -58,7 +58,7 @@ const TBS: Record<Recency, string> = {
 };
 
 /** Jeda minimum antar-pencarian dalam satu proses (menghindari batas kecepatan Firecrawl). */
-const MIN_GAP_MS = 1_200;
+const MIN_GAP_MS = 4_000;
 let chain: Promise<void> = Promise.resolve();
 let lastStart = 0;
 
@@ -105,15 +105,15 @@ export async function searchWeb(
         signal: AbortSignal.timeout(45_000),
       },
     );
-    // Batas kecepatan: tunggu sesuai Retry-After (maks. 20 dtk) lalu coba lagi, paling banyak 3 kali.
+    // Batas kecepatan: tunggu sesuai Retry-After (maks. 30 dtk) lalu coba lagi, paling banyak 3 kali.
     if (response.status === 429 && attempt < 3 && !options.noThrottle) {
       const retryAfter = Number(response.headers.get("retry-after"));
       await sleep(
         Math.min(
-          20_000,
+          30_000,
           Number.isFinite(retryAfter) && retryAfter > 0
             ? retryAfter * 1000
-            : 3_000 * 2 ** attempt,
+            : 10_000 * (attempt + 1),
         ),
       );
       continue;

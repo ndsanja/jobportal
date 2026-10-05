@@ -18,6 +18,7 @@ import { fetchPageTextWithFallback } from "@/server/ingest/page-fetch";
 import type { FetchLike, IngestSource } from "@/server/ingest/types";
 import { searchWeb } from "@/server/research/search";
 import { normalizeQueries } from "@/server/research/subject";
+import { createOpportunityFromCandidate } from "./approve";
 import { DISCOVERY_PROMPT_VERSION, extractCandidates } from "./extract";
 import { fetchPageWithLinks } from "./fetch";
 
@@ -37,6 +38,8 @@ export type DiscoveryStats = {
   linksVerified: number;
   /** Kandidat yang tidak diantrekan: tanpa tautan resmi atau skor di bawah `min_score`. */
   lowQuality: number;
+  /** Kandidat sangat kuat yang langsung dijadikan peluang (tanpa menunggu admin). */
+  autoApproved: number;
   partial: boolean;
   errors: string[];
   timingsMs: { search: number; fetch: number; extract: number; verify: number };
@@ -157,6 +160,7 @@ export async function runDiscovery(
     updatedCandidates: 0,
     linksVerified: 0,
     lowQuality: 0,
+    autoApproved: 0,
     partial: false,
     errors: [],
     timingsMs: { search: 0, fetch: 0, extract: 0, verify: 0 },
@@ -438,27 +442,57 @@ export async function runDiscovery(
       stats.updatedCandidates += 1;
       continue;
     }
-    const { error } = await db.from("discovery_candidates").insert({
-      name: c.name,
-      name_key: c.nameKey,
-      kind: c.kind,
-      organizer: c.organizer,
-      country_code:
-        c.countryCode && countryCodes.has(c.countryCode) ? c.countryCode : null,
-      levels: c.levels,
-      official_url: c.officialUrl,
-      link_verified: c.linkVerified,
-      open_to_indonesia: c.openToIndonesia,
-      deadline: c.deadline,
-      summary: c.summary,
-      evidence: c.sources.slice(0, 8) as unknown as Json,
-      score: c.score,
-      seen_count: c.seenCount,
-      source_id: source.id,
-      model,
-    });
-    if (error) note(`simpan "${c.name.slice(0, 40)}": ${error.message}`);
-    else stats.newCandidates += 1;
+    const { data: inserted, error } = await db
+      .from("discovery_candidates")
+      .insert({
+        name: c.name,
+        name_key: c.nameKey,
+        kind: c.kind,
+        organizer: c.organizer,
+        country_code:
+          c.countryCode && countryCodes.has(c.countryCode)
+            ? c.countryCode
+            : null,
+        levels: c.levels,
+        official_url: c.officialUrl,
+        link_verified: c.linkVerified,
+        open_to_indonesia: c.openToIndonesia,
+        deadline: c.deadline,
+        summary: c.summary,
+        evidence: c.sources.slice(0, 8) as unknown as Json,
+        score: c.score,
+        seen_count: c.seenCount,
+        source_id: source.id,
+        model,
+      })
+      .select("*")
+      .single();
+    if (error) {
+      note(`simpan "${c.name.slice(0, 40)}": ${error.message}`);
+      continue;
+    }
+    stats.newCandidates += 1;
+    // Persetujuan otomatis hanya untuk kandidat sangat kuat: tautan resmi terbukti, WNI eligible, skor tinggi.
+    if (
+      config.auto_approve_min_score !== null &&
+      c.score >= config.auto_approve_min_score &&
+      c.linkVerified &&
+      c.openToIndonesia === "yes" &&
+      c.officialUrl
+    ) {
+      try {
+        await createOpportunityFromCandidate(db, inserted, {
+          name: c.name,
+          officialUrl: c.officialUrl,
+          reviewerId: null,
+        });
+        stats.autoApproved += 1;
+      } catch (e) {
+        note(
+          `setujui otomatis "${c.name.slice(0, 40)}": ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
   }
 
   if (readPages.length > 0) {

@@ -13,7 +13,7 @@ import {
 } from "@/domain/scholarship-extraction";
 import { callJsonModel, type FetchLike } from "@/server/ai/json-call";
 
-export const RESEARCH_PROMPT_VERSION = "claims-v3";
+export const RESEARCH_PROMPT_VERSION = "claims-v4";
 
 export type CandidateClaim = {
   field: ClaimField;
@@ -56,7 +56,7 @@ const FIELD_GUIDE: Record<ClaimField, string> = {
   "requirement.other":
     '{"text": "syarat pemohon lain (kesehatan, karakter, tanpa tanggungan, belum pernah menerima beasiswa ini, dsb.)"}',
   "schedule.event":
-    '{"kind": "open|close|test|interview|announcement|start|ballot_open|ballot_close|other", "date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD atau null", "time": "HH:MM atau null", "timezone": "mis. UTC, GMT, WIB, AEST, Asia/Jakarta atau null", "label": "nama tahap, mis. Penutupan pendaftaran siklus 2027"} — HANYA tanggal yang tertulis lengkap (tanggal, bulan, tahun) untuk siklus berjalan/berikutnya; termasuk yang baru saja lewat pada siklus berjalan. Jangan menebak tahun.',
+    '{"kind": "open|close|test|interview|announcement|start|ballot_open|ballot_close|other", "date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD atau null", "time": "HH:MM atau null", "timezone": "mis. UTC, GMT, WIB, AEST, Asia/Jakarta atau null", "label": "nama tahap, mis. Penutupan pendaftaran siklus 2027"} — HANYA tanggal yang tertulis lengkap (tanggal, bulan, tahun). Ambil siklus berjalan/berikutnya DAN tanggal siklus sebelumnya bila tertulis (riwayat, maks. 5 tahun terakhir); label wajib menyebut tahun/siklusnya. Jangan menebak tahun.',
   "funding.type":
     '{"type": "full|partial|tuition|stipend|varies"} — penuh, parsial, hanya biaya kuliah, hanya tunjangan, atau bervariasi per program.',
   "funding.coverage":
@@ -236,10 +236,13 @@ export function validateClaims(
       const date = Date.parse((value.value as { date: string }).date);
       const day = 86_400_000;
       if (
-        date < now.getTime() - 400 * day ||
+        date < now.getTime() - 6 * 365 * day ||
         date > now.getTime() + 3 * 365 * day
       ) {
-        rejected.push({ path, reason: "Tanggal di luar siklus berjalan" });
+        rejected.push({
+          path,
+          reason: "Tanggal di luar rentang riwayat 6 tahun",
+        });
         return;
       }
     }

@@ -12,6 +12,7 @@ Untuk setiap klaim, putuskan valid true/false. Tandai valid=false bila:
 1. Kutipan TIDAK secara langsung mendukung ringkasan/nilai (nilai angka berbeda dari kutipan, kutipan hanya menyebut hal lain).
 2. Klaim bukan untuk subjek, atau hanya berlaku untuk negara/kebangsaan lain, bukan pemohon dari Indonesia.
 3. Klaim sudah usang: kutipan menyebut tanggal yang telah lewat, "sebelumnya", "hingga 2023", dsb., atau BERTENTANGAN dengan klaim lain di daftar yang berasal dari sumber yang lebih resmi atau lebih baru. Contoh: satu halaman menyebut pemohon langsung mengajukan visa, sementara halaman resmi lain yang lebih baru menyebut pemohon Indonesia wajib mengikuti ballot → klaim yang usang valid=false, alasan menyebut nomor klaim yang menggantikannya.
+Pengecualian: klaim "schedule.event" bertanggal lampau adalah RIWAYAT jadwal siklus sebelumnya dan TETAP valid selama kutipan menyebut tanggal itu; jangan tandai usang hanya karena tanggalnya sudah lewat.
 4. Klaim terlalu umum/bukan fakta yang berguna bagi pemohon (mis. kalimat promosi).
 
 Jangan menandai valid=false hanya karena Anda tidak tahu faktanya dari pengetahuan sendiri. Nilai hanya dari konsistensi kutipan, subjek, negara, dan waktu. "Hari ini" diberikan.

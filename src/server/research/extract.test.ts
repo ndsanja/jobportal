@@ -137,7 +137,7 @@ describe("validateClaims", () => {
     expect(result.claims).toHaveLength(1);
     expect(result.rejected.map((r) => r.reason)).toEqual([
       expect.stringContaining("2026-08-15"),
-      "Tanggal di luar siklus berjalan",
+      "Tanggal di luar rentang riwayat 6 tahun",
     ]);
   });
 

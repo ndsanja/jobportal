@@ -134,6 +134,14 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     verify_links: z.number().int().min(0).max(25).default(12),
     /** Skor minimum kandidat baru agar masuk antrean admin. */
     min_score: z.number().int().min(0).max(100).default(50),
+    /** Kandidat dengan skor ≥ nilai ini (+ tautan terbukti + WNI eligible) langsung jadi peluang. null = selalu lewat admin. */
+    auto_approve_min_score: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .nullable()
+      .default(80),
   }),
   z.object({
     provider: z.literal("adzuna"),

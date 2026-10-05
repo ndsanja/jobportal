@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const LINKS = [
   { href: "/whv", label: "WHV" },
+  { href: "/dama", label: "DAMA" },
   { href: "/lowongan", label: "Lowongan" },
   { href: "/beasiswa", label: "Beasiswa" },
   { href: "/beasiswa/kalender", label: "Kalender" },

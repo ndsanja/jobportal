@@ -5,9 +5,11 @@ import { AddToPlanButton } from "@/components/add-to-plan";
 import { BriefPanel } from "@/components/brief-panel";
 import { ClaimsPanel } from "@/components/claims-panel";
 import { EventsList } from "@/components/events-list";
+import { QualityBadge } from "@/components/quality-badge";
 import { SiteHeader } from "@/components/site-header";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
+import { dataQuality } from "@/domain/quality";
 import { readAttributes } from "@/lib/attributes";
 import { loadBrief, loadClaims } from "@/lib/claims-query";
 import { formatDate, formatDeadline } from "@/lib/format";
@@ -81,6 +83,15 @@ export default async function BeasiswaDetailPage({
     : item.region;
   const note = dataNote(item.attributes);
   const research = readAttributes(item.attributes).research;
+  const quality = dataQuality(
+    claims.map((c) => ({
+      field: c.field,
+      status: c.status,
+      evidence: c.claim_evidence,
+    })),
+    "scholarship",
+    now,
+  );
 
   return (
     <div className="flex flex-1 flex-col">
@@ -102,6 +113,9 @@ export default async function BeasiswaDetailPage({
         <p className="mt-1 text-zinc-600 dark:text-zinc-400">
           {item.organizations?.name}
         </p>
+        <div className="mt-3">
+          <QualityBadge quality={quality} />
+        </div>
 
         {research?.eligible_wni === true && (
           <p className="mt-3 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">

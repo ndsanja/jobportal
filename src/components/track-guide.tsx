@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { BriefPanel } from "@/components/brief-panel";
 import { ClaimsPanel } from "@/components/claims-panel";
+import { QualityBadge } from "@/components/quality-badge";
 import { SiteHeader } from "@/components/site-header";
 import { isRequirementField } from "@/domain/claims";
+import { dataQuality } from "@/domain/quality";
 import {
   evaluateRequirement,
   type RequirementResult,
@@ -85,6 +87,19 @@ export async function TrackGuide({
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 pb-16">
         <h1 className="text-2xl font-semibold tracking-tight">{heading}</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{intro}</p>
+        <div className="mt-3">
+          <QualityBadge
+            quality={dataQuality(
+              claims.map((c) => ({
+                field: c.field,
+                status: c.status,
+                evidence: c.claim_evidence,
+              })),
+              "track",
+              new Date(),
+            )}
+          />
+        </div>
 
         <div className="mt-6 flex flex-wrap gap-3 text-sm">
           <Link

@@ -5,8 +5,10 @@ import { AddToPlanButton } from "@/components/add-to-plan";
 import { BriefPanel } from "@/components/brief-panel";
 import { ClaimsPanel } from "@/components/claims-panel";
 import { EventsList } from "@/components/events-list";
+import { QualityBadge } from "@/components/quality-badge";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
+import { dataQuality } from "@/domain/quality";
 import { readAttributes, signalLabels } from "@/lib/attributes";
 import { loadBrief, loadClaims } from "@/lib/claims-query";
 import {
@@ -109,6 +111,21 @@ export default async function LowonganDetailPage({
       <p className="mt-1 text-zinc-600 dark:text-zinc-400">
         {job.organizations?.name}
       </p>
+      {isProgram && (
+        <div className="mt-3">
+          <QualityBadge
+            quality={dataQuality(
+              claims.map((c) => ({
+                field: c.field,
+                status: c.status,
+                evidence: c.claim_evidence,
+              })),
+              "program",
+              new Date(),
+            )}
+          />
+        </div>
+      )}
 
       <dl className="mt-6 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
         {location && (

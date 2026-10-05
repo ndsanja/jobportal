@@ -45,7 +45,7 @@ export async function decideClaim(formData: FormData) {
   const { data: all, error: allError } = await supabase
     .from("claims")
     .select(
-      "id, field, value_key, status, decided_by, claim_evidence(source_domain, source_tier, stance)",
+      "id, field, value_key, status, decided_by, claim_evidence(source_domain, source_tier, stance, page_date)",
     )
     .eq("subject_key", claim.subject_key);
   if (allError) throw new Error(`Gagal membaca klaim: ${allError.message}`);
@@ -60,6 +60,7 @@ export async function decideClaim(formData: FormData) {
       domain: e.source_domain,
       tier: e.source_tier as ClaimEvidence["tier"],
       stance: e.stance as ClaimEvidence["stance"],
+      asOf: e.page_date,
     })),
   }));
   for (const update of decideSubject(rows)) {

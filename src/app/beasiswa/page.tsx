@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
+import { readAttributes } from "@/lib/attributes";
 import { formatDate } from "@/lib/format";
 import { levelsLabel, STUDY_LEVEL_LABEL } from "@/lib/labels";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -30,7 +31,7 @@ export default async function BeasiswaPage({
   let query = supabase
     .from("opportunities")
     .select(
-      "slug, title, region, country_code, funding, study_levels, status, kind, verification_status, last_verified_at, closes_at, organizations(name), countries(name_id, flag)",
+      "slug, title, region, country_code, funding, study_levels, status, kind, verification_status, last_verified_at, closes_at, attributes, organizations(name), countries(name_id, flag)",
     )
     .eq("kind", "scholarship")
     .neq("status", "archived")
@@ -111,49 +112,82 @@ export default async function BeasiswaPage({
             Tidak ada beasiswa yang cocok dengan filter ini.
           </p>
         ) : (
-          <ul className="mt-6 space-y-3">
-            {data.map((item) => {
-              const state = displayState({
-                kind: item.kind,
-                status: item.status,
-                verificationStatus: item.verification_status,
-                lastVerifiedAt: new Date(item.last_verified_at),
-                closesAt: item.closes_at ? new Date(item.closes_at) : null,
-                now,
-              });
-              const destination = item.countries
-                ? `${item.countries.flag} ${item.countries.name_id}`
-                : item.region;
-              return (
-                <li key={item.slug}>
-                  <Link
-                    href={`/beasiswa/${item.slug}`}
-                    className="block rounded-xl border border-zinc-200 p-4 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <h2 className="font-medium">{item.title}</h2>
-                      <VerificationBadge state={state} />
-                    </div>
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                      {item.organizations?.name}
-                      {destination ? ` · ${destination}` : ""}
-                    </p>
-                    <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                      {item.study_levels.length > 0 && (
-                        <span>{levelsLabel(item.study_levels)}</span>
-                      )}
-                      {item.funding && <span>Dana: {item.funding}</span>}
-                      <span>
-                        {item.closes_at
-                          ? `Tenggat: ${formatDate(item.closes_at)}`
-                          : "Tenggat periode berikutnya: belum diumumkan"}
-                      </span>
-                    </p>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <form action="/beasiswa/bandingkan" method="get" className="mt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-zinc-50 px-4 py-3 text-sm dark:bg-zinc-900">
+              <span className="text-zinc-600 dark:text-zinc-400">
+                Centang 2–4 beasiswa untuk membandingkan tenggat, pendanaan, dan
+                syaratnya berdampingan.
+              </span>
+              <button
+                type="submit"
+                className="h-9 rounded-lg border border-zinc-300 px-4 font-medium hover:bg-white dark:border-zinc-700 dark:hover:bg-zinc-800"
+              >
+                Bandingkan
+              </button>
+            </div>
+            <ul className="mt-4 space-y-3">
+              {data.map((item) => {
+                const state = displayState({
+                  kind: item.kind,
+                  status: item.status,
+                  verificationStatus: item.verification_status,
+                  lastVerifiedAt: new Date(item.last_verified_at),
+                  closesAt: item.closes_at ? new Date(item.closes_at) : null,
+                  now,
+                });
+                const destination = item.countries
+                  ? `${item.countries.flag} ${item.countries.name_id}`
+                  : item.region;
+                const eligible = readAttributes(item.attributes).research
+                  ?.eligible_wni;
+                return (
+                  <li key={item.slug} className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      name="b"
+                      value={item.slug}
+                      aria-label={`Bandingkan ${item.title}`}
+                      className="mt-5 h-4 w-4 shrink-0 accent-zinc-900 dark:accent-zinc-100"
+                    />
+                    <Link
+                      href={`/beasiswa/${item.slug}`}
+                      className="block flex-1 rounded-xl border border-zinc-200 p-4 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <h2 className="font-medium">{item.title}</h2>
+                        <VerificationBadge state={state} />
+                      </div>
+                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                        {item.organizations?.name}
+                        {destination ? ` · ${destination}` : ""}
+                      </p>
+                      <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                        {eligible === true && (
+                          <span className="text-emerald-700 dark:text-emerald-400">
+                            ✓ Terbuka untuk WNI
+                          </span>
+                        )}
+                        {eligible === false && (
+                          <span className="text-red-700 dark:text-red-400">
+                            ✗ Tidak untuk WNI
+                          </span>
+                        )}
+                        {item.study_levels.length > 0 && (
+                          <span>{levelsLabel(item.study_levels)}</span>
+                        )}
+                        {item.funding && <span>Dana: {item.funding}</span>}
+                        <span>
+                          {item.closes_at
+                            ? `${item.status === "closed" ? "Ditutup" : "Tenggat"}: ${formatDate(item.closes_at)}`
+                            : "Tenggat periode berikutnya: belum diumumkan"}
+                        </span>
+                      </p>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </form>
         )}
       </main>
     </div>

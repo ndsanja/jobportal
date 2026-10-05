@@ -247,3 +247,32 @@ describe("perbaikan dari uji nyata", () => {
     expect(result.candidates[0]?.officialUrl).toBeNull();
   });
 });
+
+describe("gabung kandidat mirip dalam satu run", () => {
+  it("nama dengan tambahan singkatan atau URL resmi sama dianggap satu program", () => {
+    const known = [
+      {
+        id: "a",
+        title: "Chinese Government Scholarship",
+        organizationName: null,
+        officialUrl: "http://www.csc.edu.cn/",
+        applyUrl: null,
+      },
+    ];
+    expect(
+      findDuplicate(
+        { name: "Chinese Government Scholarship / CSC", officialUrl: null },
+        known,
+      )?.id,
+    ).toBe("a");
+    expect(
+      findDuplicate(
+        {
+          name: "Chinese Embassy Scholarships",
+          officialUrl: "http://www.csc.edu.cn/",
+        },
+        known,
+      )?.id,
+    ).toBe("a");
+  });
+});

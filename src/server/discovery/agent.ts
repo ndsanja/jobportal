@@ -247,7 +247,20 @@ export async function runDiscovery(
         stats.rejected += result.rejected.length;
         stats.candidatesFound += result.candidates.length;
         for (const candidate of result.candidates) {
-          const existing = found.get(candidate.nameKey);
+          // Gabungkan nama yang sama/mirip ("X" vs "X / CSC") atau bertautan resmi sama dalam satu run.
+          const existing =
+            found.get(candidate.nameKey) ??
+            [...found.values()].find((other) =>
+              findDuplicate(candidate, [
+                {
+                  id: other.nameKey,
+                  title: other.name,
+                  organizationName: null,
+                  officialUrl: other.officialUrl,
+                  applyUrl: null,
+                },
+              ]),
+            );
           if (existing) {
             existing.sources.push({ url, quote: candidate.evidence });
             existing.officialUrl ??= candidate.officialUrl;

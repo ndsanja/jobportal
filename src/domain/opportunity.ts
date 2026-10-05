@@ -144,9 +144,13 @@ export function deriveTracks(
 ): Track[] {
   const tracks = new Set<Track>(sourceTracks);
 
+  // Jalur WHV hanya untuk lowongan AU dengan bukti: sinyal "explicit" atau "likely".
+  // Tanpa bukti ("unknown") atau jelas tidak cocok ("unsuitable"), jangan diklaim WHV.
   if (
     tracks.has("whv_au") &&
-    (countryCode !== "AU" || signals.whv_signal === "unsuitable")
+    (countryCode !== "AU" ||
+      signals.whv_signal === "unsuitable" ||
+      signals.whv_signal === "unknown")
   ) {
     tracks.delete("whv_au");
   }

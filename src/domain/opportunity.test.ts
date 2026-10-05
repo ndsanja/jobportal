@@ -162,7 +162,10 @@ describe("deriveTracks", () => {
     ]);
   });
 
-  it("melepas WHV bila tidak cocok atau di luar Australia, jatuh ke professional", () => {
+  it("melepas WHV bila tanpa bukti, tidak cocok, atau di luar Australia; jatuh ke professional", () => {
+    expect(deriveTracks(["whv_au"], "AU", signals("unknown"))).toEqual([
+      "professional",
+    ]);
     expect(deriveTracks(["whv_au"], "AU", signals("unsuitable"))).toEqual([
       "professional",
     ]);

@@ -134,6 +134,28 @@ describe("Adzuna", () => {
     });
   });
 
+  it("tidak menganggap nama wilayah sebagai kota", () => {
+    const only = parseAdzuna(
+      {
+        results: [
+          {
+            id: "1",
+            title: "Farm Hand",
+            description: "Casual harvest work.",
+            redirect_url: "https://www.adzuna.com.au/land/ad/1",
+            company: { display_name: "Country Choice" },
+            location: {
+              display_name: "Queensland",
+              area: ["Australia", "Queensland"],
+            },
+          },
+        ],
+      },
+      adzunaConfig,
+    );
+    expect(only.items[0]).toMatchObject({ region: "Queensland", city: null });
+  });
+
   it("mengabaikan gaji yang hanya prediksi Adzuna", () => {
     expect(result.items[1]?.salary).toBeNull();
   });

@@ -3,7 +3,7 @@ import {
   type NormalizedOpportunity,
   normalizedOpportunitySchema,
 } from "@/domain/opportunity";
-import { excerpt } from "@/domain/text";
+import { excerpt, normalizeText } from "@/domain/text";
 
 export type RawItem = {
   externalId: string;
@@ -55,6 +55,9 @@ export function buildItem(raw: RawItem): NormalizedOpportunity | null {
   const location = parseLocation(raw.locationText);
   const description = raw.description ?? "";
 
+  const city = clean(raw.city) ?? location.city;
+  const region = clean(raw.region) ?? location.region;
+
   const candidate = {
     externalId: raw.externalId,
     sourceUrl: raw.sourceUrl ?? raw.applyUrl,
@@ -65,8 +68,12 @@ export function buildItem(raw: RawItem): NormalizedOpportunity | null {
     countryCode:
       raw.countryCode ??
       resolveCountry(raw.locationText ?? null, raw.fallbackCountry ?? null),
-    city: clean(raw.city) ?? location.city,
-    region: clean(raw.region) ?? location.region,
+    // Bila sumber hanya memberi nama wilayah (mis. "Queensland"), jangan dianggap kota.
+    city:
+      city && region && normalizeText(city) === normalizeText(region)
+        ? null
+        : city,
+    region,
     postcode: clean(raw.postcode),
     isRemote: raw.isRemote ?? /\bremote\b/i.test(raw.locationText ?? ""),
     category: clean(raw.category),

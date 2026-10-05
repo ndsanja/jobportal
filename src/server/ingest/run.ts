@@ -27,6 +27,8 @@ export type RunOptions = {
   group?: string;
   /** Jalankan satu sumber tertentu, tanpa memeriksa jadwal/status (untuk uji manual). */
   slug?: string;
+  /** Uji kering semua sumber berstatus draft sekaligus (hanya bersama dryRun). */
+  drafts?: boolean;
   dryRun?: boolean;
   /** Epoch ms; sumber berikutnya tidak dimulai setelah batas ini. */
   deadlineMs: number;
@@ -82,6 +84,17 @@ export async function runDueSources(options: RunOptions): Promise<RunSummary> {
       .from("sources")
       .select("*")
       .eq("slug", options.slug);
+    if (error) throw new Error(`Gagal membaca sumber: ${error.message}`);
+    rows = data;
+  } else if (options.drafts) {
+    if (!dryRun) throw new Error("Mode drafts hanya boleh bersama dry_run.");
+    const { data, error } = await db
+      .from("sources")
+      .select("*")
+      .eq("status", "draft")
+      .in("kind", SUPPORTED_KINDS)
+      .order("slug")
+      .limit(50);
     if (error) throw new Error(`Gagal membaca sumber: ${error.message}`);
     rows = data;
   } else {

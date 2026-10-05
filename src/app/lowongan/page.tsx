@@ -183,6 +183,11 @@ export default async function LowonganPage({
                       <span>
                         Diverifikasi {formatDate(job.last_verified_at)}
                       </span>
+                      {readAttributes(job.attributes).attribution && (
+                        <span>
+                          {readAttributes(job.attributes).attribution}
+                        </span>
+                      )}
                     </p>
                   </Link>
                 </li>

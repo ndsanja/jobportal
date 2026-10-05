@@ -4,6 +4,7 @@ import { fetchAdzuna } from "./adzuna";
 import { fetchAshby } from "./ashby";
 import { fetchGreenhouse } from "./greenhouse";
 import { fetchLever } from "./lever";
+import { fetchSmartRecruiters } from "./smartrecruiters";
 
 export type AdapterDeps = {
   fetch: FetchLike;
@@ -30,6 +31,8 @@ export async function runAdapter(
       return fetchLever(config, deps.fetch);
     case "ashby":
       return fetchAshby(config, deps.fetch);
+    case "smartrecruiters":
+      return fetchSmartRecruiters(config, deps.fetch);
     case "adzuna": {
       const { ADZUNA_APP_ID: appId, ADZUNA_APP_KEY: appKey } = deps.env;
       if (!appId || !appKey)

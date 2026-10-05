@@ -3,15 +3,17 @@ import adzunaFixture from "../__fixtures__/adzuna.json";
 import ashbyFixture from "../__fixtures__/ashby.json";
 import greenhouseFixture from "../__fixtures__/greenhouse.json";
 import leverFixture from "../__fixtures__/lever.json";
+import smartrecruitersFixture from "../__fixtures__/smartrecruiters.json";
 import { sourceConfigSchema } from "../config";
 import { fetchAdzuna, parseAdzuna } from "./adzuna";
 import { parseAshby } from "./ashby";
 import { parseGreenhouse } from "./greenhouse";
 import { runAdapter } from "./index";
 import { parseLever } from "./lever";
+import { fetchSmartRecruiters, parseSmartRecruiters } from "./smartrecruiters";
 
 const atsConfig = (
-  provider: "greenhouse" | "lever" | "ashby",
+  provider: "greenhouse" | "lever" | "ashby" | "smartrecruiters",
   company: string,
   country?: string,
 ) =>
@@ -185,6 +187,61 @@ describe("Adzuna", () => {
     expect(message).toContain("HTTP 429");
     expect(message).toContain("api.adzuna.com");
     expect(message).not.toContain("rahasia");
+  });
+});
+
+describe("SmartRecruiters", () => {
+  const config = atsConfig(
+    "smartrecruiters",
+    "MinorInternational",
+    "AU",
+  ) as never;
+  const result = parseSmartRecruiters(smartrecruitersFixture, config);
+
+  it("memetakan lokasi dari kode negara sumber dan membuat URL lamar publik", () => {
+    expect(result.items).toHaveLength(2);
+    expect(result.skipped).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      title: "Front Office Receptionist",
+      countryCode: "ID",
+      city: "Ubud",
+      region: "Bali",
+      category: "Front Office",
+      employmentType: "Full-time",
+      applyUrl:
+        "https://jobs.smartrecruiters.com/minorinternational/744000143982099",
+    });
+  });
+
+  it("feed lengkap hanya bila semua halaman terambil", async () => {
+    const fetchMock = vi.fn(async () => Response.json(smartrecruitersFixture));
+    const complete = await fetchSmartRecruiters(config, fetchMock);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(complete.fullFeed).toBe(true);
+
+    const partial = vi.fn(async () =>
+      Response.json({ ...smartrecruitersFixture, totalFound: 500 }),
+    );
+    expect((await fetchSmartRecruiters(config, partial)).fullFeed).toBe(false);
+  });
+});
+
+describe("negara tidak dikenal", () => {
+  it("tidak disimpan (menghindari pelanggaran foreign key)", () => {
+    const result = parseGreenhouse(
+      {
+        jobs: [
+          {
+            id: 1,
+            title: "Engineer",
+            absolute_url: "https://boards.greenhouse.io/x/jobs/1",
+            location: { name: "Bangkok" },
+          },
+        ],
+      },
+      { ...(atsConfig("greenhouse", "Agoda", "TH") as object) } as never,
+    );
+    expect(result.items[0]?.countryCode).toBeNull();
   });
 });
 

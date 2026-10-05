@@ -1,0 +1,28 @@
+{
+  "offset": 0,
+  "limit": 100,
+  "totalFound": 3,
+  "content": [
+    {
+      "id": "744000143982099",
+      "name": "Front Office Receptionist",
+      "releasedDate": "2026-10-01T03:12:00.000Z",
+      "location": {
+        "city": "Ubud",
+        "region": "Bali",
+        "country": "id",
+        "remote": false
+      },
+      "department": { "label": "Front Office" },
+      "typeOfEmployment": { "label": "Full-time" }
+    },
+    {
+      "id": "744000143982100",
+      "name": "General Manager",
+      "releasedDate": "2026-09-20T00:00:00.000Z",
+      "location": { "city": "Queenstown", "country": "nz" },
+      "typeOfEmployment": { "label": "Full-time" }
+    },
+    { "name": "Tanpa id" }
+  ]
+}

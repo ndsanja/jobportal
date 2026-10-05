@@ -16,6 +16,7 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
   atsBase.extend({ provider: z.literal("greenhouse") }),
   atsBase.extend({ provider: z.literal("lever") }),
   atsBase.extend({ provider: z.literal("ashby") }),
+  atsBase.extend({ provider: z.literal("smartrecruiters") }),
   z.object({
     provider: z.literal("adzuna"),
     group: z.string().default("jobs"),
@@ -41,6 +42,6 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
 export type SourceConfig = z.infer<typeof sourceConfigSchema>;
 export type AtsConfig = Extract<
   SourceConfig,
-  { provider: "greenhouse" | "lever" | "ashby" }
+  { provider: "greenhouse" | "lever" | "ashby" | "smartrecruiters" }
 >;
 export type AdzunaConfig = Extract<SourceConfig, { provider: "adzuna" }>;

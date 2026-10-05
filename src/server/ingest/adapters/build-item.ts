@@ -1,4 +1,4 @@
-import { resolveCountry } from "@/domain/countries";
+import { normalizeCountryCode, resolveCountry } from "@/domain/countries";
 import {
   type NormalizedOpportunity,
   normalizedOpportunitySchema,
@@ -65,9 +65,10 @@ export function buildItem(raw: RawItem): NormalizedOpportunity | null {
     title: raw.title,
     organizationName: raw.organizationName,
     kind: "job" as const,
-    countryCode:
+    countryCode: normalizeCountryCode(
       raw.countryCode ??
-      resolveCountry(raw.locationText ?? null, raw.fallbackCountry ?? null),
+        resolveCountry(raw.locationText ?? null, raw.fallbackCountry ?? null),
+    ),
     // Bila sumber hanya memberi nama wilayah (mis. "Queensland"), jangan dianggap kota.
     city:
       city && region && normalizeText(city) === normalizeText(region)

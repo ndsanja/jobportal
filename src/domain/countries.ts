@@ -89,3 +89,13 @@ export function currencyForCountry(
   if (!code) return null;
   return COUNTRY_TABLE.find(([c]) => c === code.toUpperCase())?.[1] ?? null;
 }
+
+const KNOWN_COUNTRIES = new Set(COUNTRY_TABLE.map(([code]) => code));
+
+/** Hanya kode negara yang ada di tabel `countries` yang boleh disimpan (menghindari pelanggaran FK). */
+export function normalizeCountryCode(
+  code: string | null | undefined,
+): string | null {
+  const upper = code?.trim().toUpperCase();
+  return upper && KNOWN_COUNTRIES.has(upper) ? upper : null;
+}

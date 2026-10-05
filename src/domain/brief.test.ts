@@ -78,4 +78,20 @@ describe("validateBrief", () => {
     );
     expect(result.ok).toBe(false);
   });
+
+  it("bagian tak dikenal dipindah ke catatan, bukan menggagalkan panduan", () => {
+    const result = validateBrief(
+      {
+        ...base,
+        sections: [
+          {
+            id: "kelayakan",
+            items: [{ text: "Untuk wilayah tertentu.", claim_ids: ["c1"] }],
+          },
+        ],
+      },
+      refs,
+    );
+    expect(result.ok && result.value.sections[0]?.id).toBe("catatan");
+  });
 });

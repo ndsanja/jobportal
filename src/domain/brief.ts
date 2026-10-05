@@ -35,9 +35,7 @@ const rawItem = z.object({
 const rawBrief = z.object({
   headline: z.string().min(5).max(220),
   summary: z.string().min(20).max(900),
-  sections: z.array(
-    z.object({ id: z.enum(SECTION_IDS), items: z.array(z.unknown()) }),
-  ),
+  sections: z.array(z.object({ id: z.string(), items: z.array(z.unknown()) })),
   uncertainties: z.array(z.unknown()).default([]),
 });
 
@@ -80,8 +78,11 @@ export function validateBrief(
   const merged = new Map<BriefSectionId, BriefItem[]>();
   for (const section of parsed.data.sections) {
     const items = cleanItems(section.items, validRefs);
-    if (items.length > 0)
-      merged.set(section.id, [...(merged.get(section.id) ?? []), ...items]);
+    // Bagian yang tidak dikenal (mis. "kelayakan") tidak membatalkan panduan: masuk "Catatan penting".
+    const id: BriefSectionId = (SECTION_IDS as string[]).includes(section.id)
+      ? (section.id as BriefSectionId)
+      : "catatan";
+    if (items.length > 0) merged.set(id, [...(merged.get(id) ?? []), ...items]);
   }
   const sections = BRIEF_SECTIONS.flatMap(({ id }) => {
     const items = merged.get(id);

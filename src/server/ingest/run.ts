@@ -32,6 +32,8 @@ export type RunOptions = {
   /** Uji kering semua sumber berstatus draft sekaligus (hanya bersama dryRun). */
   drafts?: boolean;
   dryRun?: boolean;
+  /** Agen riset: hapus klaim hasil sistem subjek lalu bangun ulang dari nol (bukan dry-run). */
+  reset?: boolean;
   /** Epoch ms; sumber berikutnya tidak dimulai setelah batas ini. */
   deadlineMs: number;
   fetch?: FetchLike;
@@ -124,6 +126,7 @@ export async function runDueSources(options: RunOptions): Promise<RunSummary> {
     summary.processed.push(
       await processSource(db, row, {
         dryRun,
+        reset: options.reset ?? false,
         fetch: options.fetch ?? defaultFetch,
         deadlineMs: options.deadlineMs,
       }),
@@ -136,7 +139,12 @@ export async function runDueSources(options: RunOptions): Promise<RunSummary> {
 async function processSource(
   db: ReturnType<typeof createAdminClient>,
   row: SourceRow,
-  options: { dryRun: boolean; fetch: FetchLike; deadlineMs: number },
+  options: {
+    dryRun: boolean;
+    reset?: boolean;
+    fetch: FetchLike;
+    deadlineMs: number;
+  },
 ): Promise<SourceOutcome> {
   const startedAt = new Date();
   const source = toIngestSource(row);
@@ -168,6 +176,7 @@ async function processSource(
               { fetch: options.fetch, env },
               {
                 dryRun: options.dryRun,
+                reset: options.reset ?? false,
                 now: startedAt,
                 deadlineMs: options.deadlineMs,
               },

@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     slug,
     drafts,
     dryRun,
+    reset: params.get("reset") === "1",
     deadlineMs: Date.now() + TIME_BUDGET_MS,
   });
 

@@ -46,7 +46,20 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
       }),
     ]),
     description: z.string().min(10).max(300),
-    queries: z.array(z.string().min(5).max(200)).min(1).max(8),
+    queries: z
+      .array(
+        z.union([
+          z.string().min(5).max(200),
+          z.object({
+            q: z.string().min(5).max(200),
+            recency: z.enum(["day", "week", "month", "year"]).optional(),
+          }),
+        ]),
+      )
+      .min(1)
+      .max(12),
+    /** Halaman resmi yang selalu dibaca lebih dulu, di luar hasil pencarian. */
+    seed_urls: z.array(z.string().url()).max(10).default([]),
     official_domains: z.array(z.string().min(3)).default([]),
     reputable_domains: z.array(z.string().min(3)).optional(),
     fields: z

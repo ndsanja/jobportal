@@ -1,3 +1,4 @@
+import type { BriefContent } from "@/domain/brief";
 import { createPublicClient } from "@/lib/supabase/public";
 
 export type PublicClaim = {
@@ -13,11 +14,12 @@ export type PublicClaim = {
     source_domain: string;
     source_tier: string;
     quote: string;
+    page_date: string | null;
   }>;
 };
 
 const SELECT =
-  "id, field, value, summary, status, confidence, last_verified_at, claim_evidence(source_url, source_domain, source_tier, quote)";
+  "id, field, value, summary, status, confidence, last_verified_at, claim_evidence(source_url, source_domain, source_tier, quote, page_date)";
 
 /** Klaim yang boleh dilihat publik (accepted + disputed; RLS menegakkan hal yang sama). */
 export async function loadClaims(
@@ -37,4 +39,28 @@ export async function loadClaims(
   const { data, error } = await query;
   if (error) throw new Error(`Gagal memuat klaim: ${error.message}`);
   return data as unknown as PublicClaim[];
+}
+
+export type PublicBrief = {
+  content: BriefContent;
+  generated_at: string;
+  model: string | null;
+};
+
+/** Panduan hasil sintesis AI untuk satu subjek (null bila belum disusun). */
+export async function loadBrief(
+  subject: { track: string } | { opportunityId: string },
+): Promise<PublicBrief | null> {
+  const supabase = createPublicClient();
+  const key =
+    "track" in subject
+      ? `track:${subject.track}`
+      : `opportunity:${subject.opportunityId}`;
+  const { data, error } = await supabase
+    .from("subject_briefs")
+    .select("content, generated_at, model")
+    .eq("subject_key", key)
+    .maybeSingle();
+  if (error) throw new Error(`Gagal memuat panduan: ${error.message}`);
+  return data ? (data as unknown as PublicBrief) : null;
 }

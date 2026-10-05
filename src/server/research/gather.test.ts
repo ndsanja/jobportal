@@ -15,6 +15,13 @@ const claim = (summary: string): ClaimExtraction => ({
   ok: true,
   model: "m",
   rejected: [],
+  page: {
+    aboutSubject: true,
+    indonesia: "general" as const,
+    lastUpdated: null,
+    outdated: false,
+    note: "",
+  },
   claims: [
     {
       field: "requirement.age",
@@ -160,5 +167,44 @@ describe("gatherClaims", () => {
     );
     expect(result.stats.errors).toHaveLength(8);
     expect(result.stats.timingsMs.search).toBe(120);
+  });
+
+  it("halaman usang / khusus negara lain dilewati dan tidak menghasilkan klaim", async () => {
+    const withMeta = (
+      page: Partial<Extract<ClaimExtraction, { ok: true }>["page"]>,
+    ) =>
+      ({
+        ...(claim("usia 18-30") as Extract<ClaimExtraction, { ok: true }>),
+        page: {
+          aboutSubject: true,
+          indonesia: "general" as const,
+          lastUpdated: null,
+          outdated: false,
+          note: "",
+          ...page,
+        },
+      }) as ClaimExtraction;
+    const metas = [
+      withMeta({ outdated: true }),
+      withMeta({ indonesia: "no" }),
+      withMeta({ lastUpdated: "2019-01-01" }),
+      withMeta({ lastUpdated: "2026-06-01" }),
+    ];
+    let n = 0;
+    const result = await gatherClaims(
+      base({
+        queries: ["q1"],
+        search: async () =>
+          [1, 2, 3, 4].map((i) => ({
+            url: `https://immi.homeaffairs.gov.au/${i}`,
+            title: "t",
+          })),
+        extract: async () => metas[n++ % 4] as ClaimExtraction,
+        now: () => Date.parse("2026-10-05"),
+      }),
+    );
+    expect(result.stats.pagesSkipped).toBe(3);
+    expect(result.collected).toHaveLength(1);
+    expect(result.collected[0]?.asOf).toBe("2026-06-01");
   });
 });

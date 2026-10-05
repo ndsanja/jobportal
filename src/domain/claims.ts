@@ -39,6 +39,20 @@ export const CLAIM_FIELDS = {
     countries: z.array(z.string().length(2)).min(1),
   }),
   "requirement.other": z.object({ text: z.string().min(5).max(250) }),
+  // Proses & ketentuan (bukan syarat pemohon): dipakai untuk panduan lengkap.
+  "process.application_mode": z.object({
+    mode: z.enum(["ballot", "open", "invitation_only", "other"]),
+    note: z.string().max(200).optional(),
+  }),
+  "process.ballot": z.object({ text: z.string().min(5).max(250) }),
+  "process.step": z.object({ text: z.string().min(5).max(250) }),
+  "process.timeline": z.object({ text: z.string().min(5).max(250) }),
+  "fee.application": z.object({
+    amount: z.number().positive(),
+    currency: z.string().length(3),
+    note: z.string().max(200).optional(),
+  }),
+  "condition.stay": z.object({ text: z.string().min(5).max(250) }),
 } as const;
 
 export type ClaimField = keyof typeof CLAIM_FIELDS;
@@ -53,7 +67,27 @@ export const CLAIM_FIELD_LABEL: Record<ClaimField, string> = {
   "requirement.education": "Pendidikan",
   "requirement.nationality": "Kewarganegaraan",
   "requirement.other": "Syarat lain",
+  "process.application_mode": "Cara mendaftar",
+  "process.ballot": "Ballot",
+  "process.step": "Tahapan",
+  "process.timeline": "Jadwal",
+  "fee.application": "Biaya",
+  "condition.stay": "Ketentuan setelah visa",
 };
+
+/** Bidang yang bernilai jamak: tiap butir berdiri sendiri, bukan saling bersaing. */
+export const MULTI_VALUED_FIELDS: ReadonlySet<string> = new Set([
+  "requirement.other",
+  "requirement.document",
+  "process.ballot",
+  "process.step",
+  "process.timeline",
+  "condition.stay",
+]);
+
+/** Bidang yang dinilai terhadap profil pengguna (kesiapan). */
+export const isRequirementField = (field: string) =>
+  field.startsWith("requirement.");
 
 export const isClaimField = (value: string): value is ClaimField =>
   value in CLAIM_FIELDS;
@@ -84,7 +118,13 @@ const canonical = (value: unknown): unknown => {
         .map(([key, v]) => [key, canonical(v)]),
     );
   }
-  return typeof value === "string" ? value.trim().toLowerCase() : value;
+  // Teks bebas: abaikan tanda baca/spasi/huruf besar agar kalimat yang nyaris sama menyatu.
+  return typeof value === "string"
+    ? value
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim()
+    : value;
 };
 
 /** Kunci stabil untuk nilai klaim: dua nilai yang sama secara makna menghasilkan kunci yang sama. */
@@ -156,7 +196,22 @@ export type ClaimEvidence = {
   domain: string;
   tier: SourceTier;
   stance: Stance;
+  /** Tanggal pembaruan halaman sumber (YYYY-MM-DD) bila diketahui. */
+  asOf?: string | null;
 };
+
+/** Bukti dari halaman yang terakhir diperbarui lebih dari ini dianggap usang dan tidak dihitung. */
+export const STALE_AFTER_DAYS = 730;
+
+export function isStaleEvidence(
+  asOf: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!asOf) return false;
+  const time = Date.parse(asOf);
+  if (Number.isNaN(time)) return false;
+  return now.getTime() - time > STALE_AFTER_DAYS * 86_400_000;
+}
 
 export type ClaimStatus = "accepted" | "disputed" | "proposed";
 
@@ -170,22 +225,39 @@ export type Decision = {
 /** Ambang tampil publik untuk klaim non-resmi (status `disputed`). */
 export const PUBLIC_UNOFFICIAL_MIN_CONFIDENCE = 55;
 
-const distinctDomains = (evidence: ClaimEvidence[], tier: SourceTier) =>
+const distinctDomains = (
+  evidence: ClaimEvidence[],
+  tier: SourceTier,
+  now: Date = new Date(),
+) =>
   new Set(
     evidence
-      .filter((e) => e.stance === "supports" && e.tier === tier)
+      .filter(
+        (e) =>
+          e.stance === "supports" &&
+          e.tier === tier &&
+          !isStaleEvidence(e.asOf, now),
+      )
       .map((e) => e.domain),
   ).size;
 
+const newestAsOf = (evidence: ClaimEvidence[]): number =>
+  Math.max(0, ...evidence.map((e) => Date.parse(e.asOf ?? "") || 0));
+
 /** Keyakinan 0–100 yang bisa dijelaskan: resmi ≫ sumber tepercaya ≫ komunitas; domain independen menambah. */
-export function confidenceFor(evidence: ClaimEvidence[]): {
+export function confidenceFor(
+  evidence: ClaimEvidence[],
+  now: Date = new Date(),
+): {
   confidence: number;
   reasons: string[];
 } {
-  const official = distinctDomains(evidence, "official");
-  const reputable = distinctDomains(evidence, "reputable");
-  const community = distinctDomains(evidence, "community");
+  const official = distinctDomains(evidence, "official", now);
+  const reputable = distinctDomains(evidence, "reputable", now);
+  const community = distinctDomains(evidence, "community", now);
   const reasons: string[] = [];
+  const stale = evidence.filter((e) => isStaleEvidence(e.asOf, now)).length;
+  if (stale > 0) reasons.push(`${stale} bukti usang diabaikan`);
   let confidence: number;
 
   if (official > 0) {
@@ -199,7 +271,10 @@ export function confidenceFor(evidence: ClaimEvidence[]): {
     confidence = [0, 30, 45, 55][Math.min(community, 3)] as number;
     reasons.push(`${community} sumber komunitas independen (belum resmi)`);
   } else {
-    return { confidence: 0, reasons: ["Tidak ada bukti pendukung"] };
+    return {
+      confidence: 0,
+      reasons: [...reasons, "Tidak ada bukti pendukung yang masih berlaku"],
+    };
   }
 
   const contradicting = evidence.filter((e) => e.stance === "contradicts");
@@ -226,19 +301,25 @@ export type ClaimCandidate = { key: string; evidence: ClaimEvidence[] };
 export function decideClaims(
   candidates: ClaimCandidate[],
   lockedAccepted?: string,
+  now: Date = new Date(),
 ): Decision[] {
   const scored = candidates.map((c) => ({
     ...c,
-    ...confidenceFor(c.evidence),
+    ...confidenceFor(c.evidence, now),
   }));
   const hasOfficial = (c: (typeof scored)[number]) =>
-    distinctDomains(c.evidence, "official") > 0;
+    distinctDomains(c.evidence, "official", now) > 0;
 
   const winner = lockedAccepted
     ? scored.find((c) => c.key === lockedAccepted)
     : [...scored]
         .filter(hasOfficial)
-        .sort((a, b) => b.confidence - a.confidence)[0];
+        // Keyakinan tertinggi menang; bila sama, sumber resmi yang paling baru diperbarui.
+        .sort(
+          (a, b) =>
+            b.confidence - a.confidence ||
+            newestAsOf(b.evidence) - newestAsOf(a.evidence),
+        )[0];
 
   return scored.map((c) => {
     if (winner && c.key === winner.key) {

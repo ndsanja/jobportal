@@ -49,9 +49,23 @@ export function parseSearchResponse(body: unknown): SearchResult[] {
   return results;
 }
 
+export type Recency = "day" | "week" | "month" | "year";
+const TBS: Record<Recency, string> = {
+  day: "qdr:d",
+  week: "qdr:w",
+  month: "qdr:m",
+  year: "qdr:y",
+};
+
 export async function searchWeb(
   query: string,
-  options: { apiKey: string; limit: number; fetch: FetchLike },
+  options: {
+    apiKey: string;
+    limit: number;
+    fetch: FetchLike;
+    /** Batasi hasil ke periode terakhir (berguna untuk berita/pengumuman terbaru). */
+    recency?: Recency;
+  },
 ): Promise<SearchResult[]> {
   const response = await options.fetch("https://api.firecrawl.dev/v1/search", {
     method: "POST",
@@ -59,7 +73,11 @@ export async function searchWeb(
       Authorization: `Bearer ${options.apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query, limit: options.limit }),
+    body: JSON.stringify({
+      query,
+      limit: options.limit,
+      ...(options.recency ? { tbs: TBS[options.recency] } : {}),
+    }),
     signal: AbortSignal.timeout(45_000),
   });
   if (!response.ok) throw new Error(`Pencarian gagal: HTTP ${response.status}`);

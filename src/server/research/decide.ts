@@ -2,6 +2,7 @@ import {
   type ClaimEvidence,
   type ClaimStatus,
   decideClaims,
+  MULTI_VALUED_FIELDS,
 } from "@/domain/claims";
 
 export type SubjectClaimRow = {
@@ -12,12 +13,6 @@ export type SubjectClaimRow = {
   decided_by: "system" | "admin";
   evidence: ClaimEvidence[];
 };
-
-/** Bidang yang bernilai jamak: tiap butir berdiri sendiri, bukan saling bersaing. */
-const MULTI_VALUED_FIELDS = new Set([
-  "requirement.other",
-  "requirement.document",
-]);
 
 export type ClaimUpdate = {
   id: string;
@@ -31,7 +26,10 @@ export type ClaimUpdate = {
  * klaim yang diterima admin menjadi pemenang bidangnya, klaim yang ditolak admin diabaikan,
  * dan keduanya tidak pernah ditimpa oleh sistem.
  */
-export function decideSubject(rows: SubjectClaimRow[]): ClaimUpdate[] {
+export function decideSubject(
+  rows: SubjectClaimRow[],
+  now: Date = new Date(),
+): ClaimUpdate[] {
   const updates: ClaimUpdate[] = [];
   const byField = new Map<string, SubjectClaimRow[]>();
   for (const row of rows)
@@ -49,8 +47,10 @@ export function decideSubject(rows: SubjectClaimRow[]): ClaimUpdate[] {
       evidence: row.evidence,
     }));
     const decisions = MULTI_VALUED_FIELDS.has(group[0]?.field ?? "")
-      ? candidates.flatMap((candidate) => decideClaims([candidate]))
-      : decideClaims(candidates, locked?.value_key);
+      ? candidates.flatMap((candidate) =>
+          decideClaims([candidate], undefined, now),
+        )
+      : decideClaims(candidates, locked?.value_key, now);
 
     for (const decision of decisions) {
       const row = live.find((r) => r.value_key === decision.key);

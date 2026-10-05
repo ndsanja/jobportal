@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   classifyTier,
   domainOf,
+  isStaleEvidence,
   type SourceTier,
   type TierRules,
   valueKey,
@@ -20,6 +21,19 @@ export type Collected = {
   domain: string;
   tier: SourceTier;
   pageHash: string;
+  /** Tanggal pembaruan halaman (YYYY-MM-DD) bila tertulis di halaman. */
+  asOf: string | null;
+};
+
+export type PageReport = {
+  url: string;
+  domain: string;
+  tier: SourceTier;
+  /** read = diekstrak; skipped = dilewati (bukan subjek/usang/negara lain); unchanged; failed. */
+  outcome: "read" | "skipped" | "unchanged" | "failed";
+  lastUpdated: string | null;
+  note: string;
+  claims: number;
 };
 
 export type GatherStats = {
@@ -28,6 +42,8 @@ export type GatherStats = {
   pagesRead: number;
   pagesUnchanged: number;
   pagesFailed: number;
+  /** Halaman dibaca tetapi dilewati: bukan tentang subjek, khusus negara lain, atau usang. */
+  pagesSkipped: number;
   claimsExtracted: number;
   claimsRejected: number;
   partial: boolean;
@@ -39,6 +55,8 @@ export type GatherStats = {
 
 export type GatherParams = {
   queries: string[];
+  /** URL yang selalu dibaca (mis. halaman resmi utama), tanpa bergantung pada pencarian. */
+  seedUrls?: string[];
   maxPages: number;
   rules: TierRules;
   deadlineMs: number;
@@ -47,6 +65,8 @@ export type GatherParams = {
   fetchPage: (url: string) => Promise<string>;
   extract: (text: string) => Promise<ClaimExtraction>;
   now?: () => number;
+  /** Ditambahkan ke hash isi halaman agar ekstraksi ulang bila versi prompt berubah. */
+  hashSalt?: string;
 };
 
 const TIER_ORDER: Record<SourceTier, number> = {
@@ -80,6 +100,7 @@ export async function gatherClaims(params: GatherParams): Promise<{
   collected: Collected[];
   readPages: Array<{ url: string; hash: string }>;
   unchangedUrls: string[];
+  reports: PageReport[];
   stats: GatherStats;
 }> {
   const clock = params.now ?? Date.now;
@@ -89,6 +110,7 @@ export async function gatherClaims(params: GatherParams): Promise<{
     pagesRead: 0,
     pagesUnchanged: 0,
     pagesFailed: 0,
+    pagesSkipped: 0,
     claimsExtracted: 0,
     claimsRejected: 0,
     partial: false,
@@ -112,6 +134,7 @@ export async function gatherClaims(params: GatherParams): Promise<{
 
   // 1. Cari
   const found = new Map<string, number>();
+  for (const url of params.seedUrls ?? []) found.set(url, found.size);
   for (const [index, query] of params.queries.entries()) {
     if (clock() > params.deadlineMs) {
       stats.partial = true;
@@ -148,6 +171,21 @@ export async function gatherClaims(params: GatherParams): Promise<{
   const collected: Collected[] = [];
   const readPages: Array<{ url: string; hash: string }> = [];
   const unchangedUrls: string[] = [];
+  const reports: PageReport[] = [];
+  const report = (
+    page: { url: string; tier: SourceTier },
+    outcome: PageReport["outcome"],
+    extra: Partial<Pick<PageReport, "lastUpdated" | "note" | "claims">> = {},
+  ) =>
+    reports.push({
+      url: page.url,
+      domain: domainOf(page.url),
+      tier: page.tier,
+      outcome,
+      lastUpdated: extra.lastUpdated ?? null,
+      note: extra.note ?? "",
+      claims: extra.claims ?? 0,
+    });
 
   const processPage = async (page: (typeof pages)[number]) => {
     const host = domainOf(page.url);
@@ -158,13 +196,15 @@ export async function gatherClaims(params: GatherParams): Promise<{
     } catch (error) {
       stats.pagesFailed += 1;
       note(`baca ${host}: ${describeError(error)}`);
+      report(page, "failed", { note: describeError(error) });
       return;
     }
 
-    const hash = sha256(normalizeForMatch(text));
+    const hash = sha256(`${params.hashSalt ?? ""}|${normalizeForMatch(text)}`);
     if (known.get(page.url) === hash) {
       stats.pagesUnchanged += 1;
       unchangedUrls.push(page.url);
+      report(page, "unchanged");
       return;
     }
 
@@ -174,11 +214,34 @@ export async function gatherClaims(params: GatherParams): Promise<{
     } catch (error) {
       stats.pagesFailed += 1;
       note(`ekstrak ${host}: ${describeError(error)}`);
+      report(page, "failed", { note: describeError(error) });
       return;
     }
     if (!extraction.ok) {
       stats.pagesFailed += 1;
       note(`ekstrak ${host}: ${extraction.error}`);
+      report(page, "failed", { note: extraction.error });
+      return;
+    }
+
+    const meta = extraction.page;
+    const skipReason = !meta.aboutSubject
+      ? "bukan tentang subjek"
+      : meta.indonesia === "no"
+        ? "khusus negara lain"
+        : meta.outdated
+          ? "halaman menyatakan usang/arsip"
+          : isStaleEvidence(meta.lastUpdated, new Date(clock()))
+            ? `usang (diperbarui ${meta.lastUpdated})`
+            : null;
+    if (skipReason) {
+      stats.pagesSkipped += 1;
+      // Tetap catat hash agar halaman yang tidak berubah tidak diproses ulang.
+      readPages.push({ url: page.url, hash });
+      report(page, "skipped", {
+        lastUpdated: meta.lastUpdated,
+        note: skipReason,
+      });
       return;
     }
 
@@ -186,6 +249,11 @@ export async function gatherClaims(params: GatherParams): Promise<{
     stats.claimsExtracted += extraction.claims.length;
     stats.claimsRejected += extraction.rejected.length;
     readPages.push({ url: page.url, hash });
+    report(page, "read", {
+      lastUpdated: meta.lastUpdated,
+      note: meta.note,
+      claims: extraction.claims.length,
+    });
     for (const claim of extraction.claims) {
       collected.push({
         field: claim.field,
@@ -197,6 +265,7 @@ export async function gatherClaims(params: GatherParams): Promise<{
         domain: host,
         tier: page.tier,
         pageHash: hash,
+        asOf: meta.lastUpdated,
       });
     }
   };
@@ -222,5 +291,5 @@ export async function gatherClaims(params: GatherParams): Promise<{
   const rank = new Map(pages.map((page, index) => [page.url, index]));
   collected.sort((a, b) => (rank.get(a.url) ?? 0) - (rank.get(b.url) ?? 0));
 
-  return { collected, readPages, unchangedUrls, stats };
+  return { collected, readPages, unchangedUrls, reports, stats };
 }

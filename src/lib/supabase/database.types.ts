@@ -29,11 +29,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      subject_briefs: {
+        Row: {
+          content: Json;
+          generated_at: string;
+          input_hash: string;
+          model: string | null;
+          opportunity_id: string | null;
+          prompt_version: string | null;
+          subject_key: string;
+          subject_type: string;
+          track: Database["public"]["Enums"]["track"] | null;
+        };
+        Insert: {
+          content: Json;
+          generated_at?: string;
+          input_hash: string;
+          model?: string | null;
+          opportunity_id?: string | null;
+          prompt_version?: string | null;
+          subject_key: string;
+          subject_type: string;
+          track?: Database["public"]["Enums"]["track"] | null;
+        };
+        Update: {
+          content?: Json;
+          generated_at?: string;
+          input_hash?: string;
+          model?: string | null;
+          opportunity_id?: string | null;
+          prompt_version?: string | null;
+          subject_key?: string;
+          subject_type?: string;
+          track?: Database["public"]["Enums"]["track"] | null;
+        };
+        Relationships: [];
+      };
       claim_evidence: {
         Row: {
           claim_id: string;
           id: string;
           model: string | null;
+          page_date: string | null;
           page_hash: string | null;
           quote: string;
           quote_key: string;
@@ -47,6 +84,7 @@ export type Database = {
           claim_id: string;
           id?: string;
           model?: string | null;
+          page_date?: string | null;
           page_hash?: string | null;
           quote: string;
           quote_key: string;
@@ -60,6 +98,7 @@ export type Database = {
           claim_id?: string;
           id?: string;
           model?: string | null;
+          page_date?: string | null;
           page_hash?: string | null;
           quote?: string;
           quote_key?: string;

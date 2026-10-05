@@ -211,3 +211,40 @@ describe("decideClaims", () => {
     expect(result.find((d) => d.key === "a")?.status).not.toBe("accepted");
   });
 });
+
+describe("bukti usang & kebaruan", () => {
+  const now = new Date("2026-10-05");
+  const dated = (asOf: string): ClaimEvidence => ({
+    domain: "indonesia.embassy.gov.au",
+    tier: "official",
+    stance: "supports",
+    asOf,
+  });
+
+  it("bukti resmi yang usang (>2 tahun) tidak dihitung", () => {
+    const result = decideClaims(
+      [{ key: "lama", evidence: [dated("2022-01-01")] }],
+      undefined,
+      now,
+    );
+    expect(result[0]?.status).toBe("proposed");
+    expect(result[0]?.confidence).toBe(0);
+  });
+
+  it("dua nilai resmi sama kuat: yang halamannya lebih baru menang", () => {
+    const result = decideClaims(
+      [
+        { key: "lama", evidence: [dated("2025-01-01")] },
+        {
+          key: "baru",
+          evidence: [
+            { ...dated("2026-08-01"), domain: "immi.homeaffairs.gov.au" },
+          ],
+        },
+      ],
+      undefined,
+      now,
+    );
+    expect(result.find((d) => d.status === "accepted")?.key).toBe("baru");
+  });
+});

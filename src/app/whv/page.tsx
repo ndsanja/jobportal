@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BriefPanel } from "@/components/brief-panel";
 import { ClaimsPanel } from "@/components/claims-panel";
 import { SiteHeader } from "@/components/site-header";
+import { isRequirementField } from "@/domain/claims";
 import {
   evaluateRequirement,
   type RequirementResult,
   summarizeReadiness,
 } from "@/domain/readiness";
 import { getCurrentUser } from "@/lib/auth";
-import { loadClaims } from "@/lib/claims-query";
+import { loadBrief, loadClaims } from "@/lib/claims-query";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -18,7 +20,10 @@ export const metadata: Metadata = {
 };
 
 export default async function WhvPage() {
-  const claims = await loadClaims({ track: "whv_au" });
+  const [claims, brief] = await Promise.all([
+    loadClaims({ track: "whv_au" }),
+    loadBrief({ track: "whv_au" }),
+  ]);
   const user = await getCurrentUser();
 
   let readiness: Map<string, RequirementResult> | undefined;
@@ -38,7 +43,9 @@ export default async function WhvPage() {
     ]);
     const now = new Date();
     const results = new Map<string, RequirementResult>();
-    for (const claim of claims.filter((c) => c.status === "accepted")) {
+    for (const claim of claims.filter(
+      (c) => c.status === "accepted" && isRequirementField(c.field),
+    )) {
       results.set(
         claim.id,
         evaluateRequirement(
@@ -107,8 +114,17 @@ export default async function WhvPage() {
           </p>
         )}
 
-        <div className="mt-8">
-          <ClaimsPanel claims={claims} readiness={readiness} />
+        {brief && (
+          <div className="mt-8">
+            <BriefPanel brief={brief} claims={claims} />
+          </div>
+        )}
+
+        <div className="mt-10">
+          <h2 className="text-base font-semibold">Rincian syarat & bukti</h2>
+          <div className="mt-3">
+            <ClaimsPanel claims={claims} readiness={readiness} />
+          </div>
         </div>
       </main>
     </div>

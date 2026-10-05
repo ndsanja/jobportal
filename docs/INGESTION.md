@@ -87,6 +87,12 @@ Jadwal mingguan: seperti §4 dengan `?group=research`.
 
 Hasil dry-run memuat `errors` (galat per tahap, mis. `ekstrak homeaffairs.gov.au: timeout`) dan `timingsMs` (total waktu cari/baca/ekstrak). Satu kueri/halaman yang gagal atau timeout dilewati dan dicatat; run tetap selesai dengan hasil sebagian (`partial: true` bila waktu habis). Bila `extract` selalu timeout, coba model lain lewat environment `OPENROUTER_MODEL`.
 
+**Mesin riset v2 (akurasi & panduan akhir).** Alur: cari (query `site:` ke domain resmi, query berkala `recency`, dan `seed_urls` halaman resmi utama) → baca halaman paralel → ekstraksi (prompt `claims-v2`: model juga melaporkan apakah halaman tentang subjek, berlaku untuk Indonesia, tanggal pembaruan yang dikutip persis, dan apakah usang; halaman usang/negara lain dilewati) → **pemeriksa fakta** (`verify.ts`: membuang klaim yang tidak didukung kutipan, bukan untuk Indonesia, usang, atau bertentangan dengan sumber resmi lebih baru) → keputusan status. Bukti dari halaman yang diperbarui >2 tahun lalu tidak dihitung; bila dua nilai resmi sama kuat, yang halamannya lebih baru menang. Bidang proses (`process.application_mode` = ballot/open, `process.ballot`, `process.step`, `process.timeline`, `fee.application`, `condition.stay`) ikut diekstrak. Terakhir, **panduan** (`brief.ts`) disusun dari klaim `accepted`/`disputed`: tiap butir wajib merujuk klaim (butir tanpa rujukan dibuang), klaim `disputed` hanya muncul di "Yang belum pasti". Panduan disimpan di `subject_briefs` dan hanya disusun ulang bila klaim berubah.
+
+- Dry-run kini memuat `pages` (dibaca/dilewati + alasan + tanggal pembaruan), `claims` (semua klaim + status), `dropped` (dibuang pemeriksa fakta), dan `guide` (panduan akhir).
+- `?reset=1` (bukan dry-run) menghapus klaim hasil sistem subjek itu lalu membangunnya ulang; keputusan admin tidak disentuh. Pakai sekali setelah pembaruan mesin untuk membuang klaim usang lama.
+
+
 ## Pengaman bawaan
 - Endpoint hanya menerima `POST` + Bearer `CRON_SECRET` (503 bila secret belum diatur — tidak pernah terbuka).
 - Lowongan hilang dari feed ATS → ditutup, **kecuali** >50% hilang sekaligus (dianggap feed parsial; `closeSkipped: true`).

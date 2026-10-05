@@ -154,7 +154,7 @@ export function evaluateRequirement(
         detail: ok ? "Terbuka untuk WNI" : "Tidak terbuka untuk WNI",
       };
     }
-    case "requirement.other":
+    default:
       return { status: "manual", detail: "Cek manual" };
   }
 }

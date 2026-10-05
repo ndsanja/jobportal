@@ -199,6 +199,8 @@ export const MULTI_VALUED_FIELDS: ReadonlySet<string> = new Set([
   "process.step",
   "process.timeline",
   "condition.stay",
+  // Biaya bisa berbeda per tahap/produk (mis. visa pertama vs kedua), bukan nilai yang bersaing.
+  "fee.application",
 ]);
 
 /**

@@ -37,6 +37,18 @@ const PAGE = 1000;
 const MAX_CLOSE_RATIO = 0.5;
 const MIN_FOR_RATIO_GUARD = 20;
 
+/** URL tanpa parameter pelacakan per-permintaan (mis. `se` dan `utm_*` Adzuna) untuk deteksi perubahan. */
+export function stableUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    for (const key of [...u.searchParams.keys()])
+      if (key === "se" || key.startsWith("utm_")) u.searchParams.delete(key);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 const sha1 = (value: string, length: number) =>
   createHash("sha1").update(value).digest("hex").slice(0, length);
 
@@ -180,7 +192,7 @@ export async function publishItems(
   for (const p of prepared) {
     const old = existing.get(p.key);
     if (!old) continue;
-    if (old.apply_url !== p.item.applyUrl) {
+    if (stableUrl(old.apply_url) !== stableUrl(p.item.applyUrl)) {
       changes.push({
         opportunity_id: old.id,
         field: "apply_url",

@@ -11,7 +11,7 @@
 | Fase 1 — lowongan: Adzuna, adapter career page (Greenhouse/Lever/Ashby/SmartRecruiters), `/lowongan` | ✅ Adzuna berjalan (242 lowongan); 10 career page berstatus draft menunggu uji kering |
 | Beasiswa: 10 program, `/beasiswa`, kalender, pemantau halaman + ekstraksi AI + antrean review | ✅ kode & data awal ada; pemantau (draft) menunggu uji kering; data awal berstatus "Menunggu verifikasi" |
 | Fase 2 — profil, dokumen (metadata), Rencana ("Tambah ke Rencana") | ✅ ada; belum diuji dengan sesi login nyata |
-| Fase 2 — Requirement Matrix, Readiness, rekomendasi, checklist gabungan | ⏳ butuh data syarat resmi yang terverifikasi (WHV, beasiswa) |
+| Mesin riset AI (cari → bandingkan → verifikasi → skor keyakinan) + Requirement Matrix + Readiness (`/whv`) | ✅ kode siap; 5 agen riset berstatus draft menunggu uji kering; rekomendasi & checklist gabungan belum |
 | Fase 3 — timeline, countdown ICS, notifikasi (email/push), ballot tracker WHV | ⏳ belum |
 | Penjadwalan otomatis `pg_cron` | ⏳ SQL siap di `docs/INGESTION.md`, belum dipasang (butuh `CRON_SECRET`) |
 

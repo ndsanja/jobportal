@@ -69,6 +69,22 @@ select cron.schedule('monitor-pages', '30 1 * * *', $$
 $$);
 ```
 
+## 6. Agen riset (syarat WHV & beasiswa) — mencari, membandingkan, memverifikasi
+Sumber `provider: research_agent` bekerja seperti peneliti: **cari di web (Firecrawl) → baca halaman (resmi dulu) → model mengekstrak klaim + kutipan → simpan sebagai klaim dan bukti → hitung status dan keyakinan**.
+
+- **Tingkat sumber:** `official` (daftar domain resmi per sumber + pola pemerintah `.gov`, `.go.id`, `.europa.eu`, …), `reputable` (media/lembaga tepercaya), `community` (blog, forum, lainnya). Platform sosial (Instagram/TikTok/Facebook/X/YouTube) tidak diambil.
+- **Keyakinan (bisa dijelaskan):** resmi 90–99 · 2+ sumber tepercaya 75 · 1 tepercaya 55 · komunitas 30/45/55 (1/2/3+ domain independen). Domain yang sama tidak dihitung dua kali; bukti yang menyanggah menurunkan skor.
+- **Status:** `accepted` hanya bila ada sumber resmi (atau ditetapkan admin) · `disputed` = tampil publik berlabel **"belum resmi"** (keyakinan ≥ 55 atau bersaing dengan nilai resmi) · `proposed` = terlalu lemah, disembunyikan.
+- **Tidak pernah dipercaya tanpa bukti:** klaim tanpa kutipan yang cocok dengan teks halaman, nilai di luar skema, atau kode dokumen asing dibuang otomatis.
+- **Admin menang:** `/admin/claims` untuk menetapkan *Resmi*, *Tolak*, atau mengembalikan ke *Otomatis*.
+- **Tampil di:** `/whv` (syarat WHV + kesiapan pengguna yang login) dan bagian "Syarat" pada `/beasiswa/[slug]`.
+
+Uji kering satu agen (tidak menulis; menampilkan `preview` klaim): 
+```bash
+curl -s -X POST "https://<domain>/api/ingest/run?slug=research-whv-462&dry_run=1" -H "Authorization: Bearer $CRON_SECRET"
+```
+Jadwal mingguan: seperti §4 dengan `?group=research`.
+
 ## Pengaman bawaan
 - Endpoint hanya menerima `POST` + Bearer `CRON_SECRET` (503 bila secret belum diatur — tidak pernah terbuka).
 - Lowongan hilang dari feed ATS → ditutup, **kecuali** >50% hilang sekaligus (dianggap feed parsial; `closeSkipped: true`).

@@ -2,6 +2,10 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import { type ResearchStats, runResearch } from "@/server/research/agent";
+import {
+  type OpportunityResearchStats,
+  runOpportunityResearch,
+} from "@/server/research/opportunities";
 import { runAdapter } from "./adapters";
 import { defaultFetch } from "./http";
 import { type MonitorStats, runMonitor } from "./monitor";
@@ -34,6 +38,8 @@ export type RunOptions = {
   dryRun?: boolean;
   /** Agen riset: hapus klaim hasil sistem subjek lalu bangun ulang dari nol (bukan dry-run). */
   reset?: boolean;
+  /** Riset otomatis: slug peluang tertentu (abaikan jadwal) untuk uji manual. */
+  target?: string;
   /** Epoch ms; sumber berikutnya tidak dimulai setelah batas ini. */
   deadlineMs: number;
   fetch?: FetchLike;
@@ -42,7 +48,11 @@ export type RunOptions = {
 export type SourceOutcome = {
   slug: string;
   status: "success" | "partial" | "failed";
-  stats?: PublishStats | MonitorStats | ResearchStats;
+  stats?:
+    | PublishStats
+    | MonitorStats
+    | ResearchStats
+    | OpportunityResearchStats;
   error?: string;
 };
 
@@ -127,6 +137,7 @@ export async function runDueSources(options: RunOptions): Promise<RunSummary> {
       await processSource(db, row, {
         dryRun,
         reset: options.reset ?? false,
+        target: options.target,
         fetch: options.fetch ?? defaultFetch,
         deadlineMs: options.deadlineMs,
       }),
@@ -142,6 +153,7 @@ async function processSource(
   options: {
     dryRun: boolean;
     reset?: boolean;
+    target?: string;
     fetch: FetchLike;
     deadlineMs: number;
   },
@@ -167,30 +179,42 @@ async function processSource(
         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
         OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
       };
+      const deps = { fetch: options.fetch, env };
+      const researchOptions = {
+        dryRun: options.dryRun,
+        reset: options.reset ?? false,
+        now: startedAt,
+        deadlineMs: options.deadlineMs,
+      };
       const provider = (row.config as { provider?: unknown } | null)?.provider;
-      const stats =
-        provider === "research_agent"
-          ? await runResearch(
-              db,
-              source,
-              { fetch: options.fetch, env },
-              {
-                dryRun: options.dryRun,
-                reset: options.reset ?? false,
-                now: startedAt,
-                deadlineMs: options.deadlineMs,
-              },
-            )
-          : await runMonitor(
-              db,
-              source,
-              { fetch: options.fetch, env },
-              { dryRun: options.dryRun, now: startedAt },
-            );
+      let stats: NonNullable<SourceOutcome["stats"]>;
+      let failed = false;
+      if (provider === "research_agent") {
+        stats = await runResearch(db, source, deps, researchOptions);
+      } else if (provider === "opportunity_research") {
+        const result = await runOpportunityResearch(db, source, deps, {
+          ...researchOptions,
+          target: options.target,
+        });
+        failed =
+          result.processed.length > 0 &&
+          result.processed.every((p) => p.status === "failed");
+        stats = result;
+      } else {
+        stats = await runMonitor(db, source, deps, {
+          dryRun: options.dryRun,
+          now: startedAt,
+        });
+      }
       outcome = {
         slug: row.slug,
-        status: "partial" in stats && stats.partial ? "partial" : "success",
+        status: failed
+          ? "failed"
+          : "partial" in stats && stats.partial
+            ? "partial"
+            : "success",
         stats,
+        ...(failed ? { error: "Semua subjek riset gagal (lihat stats)." } : {}),
       };
     } else {
       const result = await runAdapter(source, {

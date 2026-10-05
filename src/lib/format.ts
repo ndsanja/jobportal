@@ -6,6 +6,28 @@ const dateFormat = new Intl.DateTimeFormat("id-ID", {
 export const formatDate = (value: string | Date): string =>
   dateFormat.format(new Date(value));
 
+const wibDate = new Intl.DateTimeFormat("id-ID", {
+  dateStyle: "long",
+  timeZone: "Asia/Jakarta",
+});
+const wibTime = new Intl.DateTimeFormat("id-ID", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "Asia/Jakarta",
+});
+
+/** Tenggat dalam WIB; jam hanya ditampilkan bila tertulis di sumber resmi ("exact"). */
+export function formatDeadline(
+  value: string,
+  precision?: string | null,
+): string {
+  const date = new Date(value);
+  return precision === "exact"
+    ? `${wibDate.format(date)}, ${wibTime.format(date)} WIB`
+    : wibDate.format(date);
+}
+
 export function formatSalary(opportunity: {
   salary_min: number | null;
   salary_max: number | null;

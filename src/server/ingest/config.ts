@@ -45,7 +45,9 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
         opportunity_slug: z.string().min(1),
       }),
     ]),
-    description: z.string().min(10).max(300),
+    description: z.string().min(10).max(400),
+    /** Profil bidang (visa_program/scholarship/job_program); bawaan ditentukan dari subjek. */
+    profile: z.enum(["visa_program", "scholarship", "job_program"]).optional(),
     queries: z
       .array(
         z.union([
@@ -68,6 +70,22 @@ export const sourceConfigSchema = z.discriminatedUnion("provider", [
     max_pages: z.number().int().min(1).max(20).default(8),
     results_per_query: z.number().int().min(1).max(10).default(5),
     max_chars: z.number().int().min(2000).max(120000).default(30000),
+  }),
+  z.object({
+    /** Meriset otomatis setiap beasiswa/program yang jatuh tempo (lihat research_subjects). */
+    provider: z.literal("opportunity_research"),
+    group: z.string().default("research"),
+    kinds: z
+      .array(z.enum(["scholarship", "program"]))
+      .min(1)
+      .default(["scholarship", "program"]),
+    /** Maksimum subjek per pemanggilan (dibatasi juga oleh waktu). */
+    per_run: z.number().int().min(1).max(10).default(2),
+    /** Subjek yang diriset bersamaan. */
+    parallel: z.number().int().min(1).max(4).default(2),
+    refresh_days: z.number().int().min(1).max(90).default(7),
+    urgent_days: z.number().int().min(1).max(30).default(2),
+    closed_refresh_days: z.number().int().min(1).max(180).default(30),
   }),
   z.object({
     provider: z.literal("adzuna"),

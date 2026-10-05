@@ -7,7 +7,8 @@ const TIME_BUDGET_MS = 240_000;
 
 /**
  * Dipicu pg_cron + pg_net (Supabase) dengan `Authorization: Bearer <CRON_SECRET>`.
- * Query: ?group=jobs (default) · ?slug=<sumber>&dry_run=1 uji satu sumber · ?drafts=1&dry_run=1 uji semua sumber draft.
+ * Query: ?group=jobs (default) · ?slug=<sumber>&dry_run=1 uji satu sumber · ?drafts=1&dry_run=1 uji semua sumber draft
+ * · ?slug=research-opportunities&opportunity=<slug-peluang> riset satu peluang · &reset=1 bangun ulang klaim.
  */
 export async function POST(request: Request) {
   const denied = verifyCronRequest(request);
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     drafts,
     dryRun,
     reset: params.get("reset") === "1",
+    target: params.get("opportunity") ?? undefined,
     deadlineMs: Date.now() + TIME_BUDGET_MS,
   });
 

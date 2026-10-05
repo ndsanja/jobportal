@@ -3,12 +3,14 @@ import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BriefContent } from "@/domain/brief";
 import {
-  CLAIM_FIELD_NAMES,
   type ClaimEvidence,
   DEFAULT_REPUTABLE_DOMAINS,
+  FIELD_PROFILES,
+  type FieldProfile,
   quoteKey,
   type SourceTier,
 } from "@/domain/claims";
+import type { FactClaim } from "@/domain/facts";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { DEFAULT_MODEL } from "@/server/ai/openrouter";
 import { sourceConfigSchema } from "@/server/ingest/config";
@@ -23,7 +25,12 @@ import {
 import { decideSubject, type SubjectClaimRow } from "./decide";
 import { extractClaims, RESEARCH_PROMPT_VERSION } from "./extract";
 import { type Collected, gatherClaims, type PageReport } from "./gather";
-import { type Recency, searchWeb } from "./search";
+import { searchWeb } from "./search";
+import {
+  normalizeQueries,
+  type ResearchSpec,
+  type ResearchSubject,
+} from "./subject";
 import { verifyClaims } from "./verify";
 
 type Db = SupabaseClient<Database>;
@@ -36,7 +43,7 @@ export type ResearchStats = {
   pagesFailed: number;
   pagesSkipped: number;
   claimsExtracted: number;
-  /** Ditolak validasi kutipan/skema. */
+  /** Ditolak validasi kutipan/skema/angka. */
   claimsRejected: number;
   /** Dibuang pemeriksa fakta (usang, negara lain, tidak didukung kutipan, dsb.). */
   claimsDropped: number;
@@ -80,6 +87,16 @@ export type ResearchDeps = {
   };
 };
 
+export type ResearchOptions = {
+  dryRun: boolean;
+  now: Date;
+  deadlineMs: number;
+  reset?: boolean;
+};
+
+/** Hasil riset satu subjek: statistik + klaim akhir (diterima/belum resmi) untuk diterapkan ke listing. */
+export type ResearchResult = { stats: ResearchStats; final: FactClaim[] };
+
 const sha256 = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const TIER_ORDER: Record<SourceTier, number> = {
@@ -106,6 +123,7 @@ const chunked = <T>(items: T[], size: number): T[][] => {
 };
 
 type EvidenceLike = {
+  url: string;
   domain: string;
   tier: SourceTier;
   quote: string;
@@ -130,98 +148,71 @@ function summarizeEvidence(evidence: EvidenceLike[]) {
   };
 }
 
+const emptyStats = (): ResearchStats => ({
+  queries: 0,
+  pagesFound: 0,
+  pagesRead: 0,
+  pagesUnchanged: 0,
+  pagesFailed: 0,
+  pagesSkipped: 0,
+  claimsExtracted: 0,
+  claimsRejected: 0,
+  claimsDropped: 0,
+  accepted: 0,
+  disputed: 0,
+  proposed: 0,
+  partial: false,
+  errors: [],
+  timingsMs: { search: 0, fetch: 0, extract: 0, verify: 0, brief: 0 },
+  brief: "dilewati",
+  pages: [],
+});
+
+/** Ringkasan statistik yang disimpan di research_subjects (tanpa larik besar). */
+export const compactStats = (stats: ResearchStats) => ({
+  queries: stats.queries,
+  pagesRead: stats.pagesRead,
+  pagesSkipped: stats.pagesSkipped,
+  pagesUnchanged: stats.pagesUnchanged,
+  pagesFailed: stats.pagesFailed,
+  claimsExtracted: stats.claimsExtracted,
+  claimsRejected: stats.claimsRejected,
+  claimsDropped: stats.claimsDropped,
+  accepted: stats.accepted,
+  disputed: stats.disputed,
+  proposed: stats.proposed,
+  partial: stats.partial,
+  errors: stats.errors,
+  timingsMs: stats.timingsMs,
+  brief: stats.brief,
+});
+
 /**
- * Agen riset: cari di web → baca halaman (resmi lebih dulu) → model mengekstrak klaim dengan
- * kutipan → pemeriksa fakta menyaring yang usang/bukan untuk Indonesia/tidak didukung kutipan →
- * simpan klaim + bukti → hitung status & keyakinan → susun panduan akhir yang informatif.
- * Hasil pada bidang "requirement.*" hanya menjadi `accepted` bila ada sumber resmi yang masih
- * berlaku; sumber lain tampil berlabel "belum resmi".
+ * Mesin riset untuk SATU subjek: cari di web → baca halaman (resmi lebih dulu) → model mengekstrak
+ * klaim berkutipan (angka & tanggal wajib tertulis di kutipan) → pemeriksa fakta menyaring yang
+ * usang/bukan untuk Indonesia/bertentangan → simpan klaim + bukti → hitung status & keyakinan →
+ * susun panduan akhir. Fakta hanya `accepted` bila didukung sumber resmi yang masih berlaku.
  */
-export async function runResearch(
+export async function researchSubject(
   db: Db,
-  source: IngestSource,
+  spec: ResearchSpec,
   deps: ResearchDeps,
-  options: {
-    dryRun: boolean;
-    now: Date;
-    deadlineMs: number;
-    reset?: boolean;
-  },
-): Promise<ResearchStats> {
-  const parsed = sourceConfigSchema.safeParse(source.config);
-  if (!parsed.success || parsed.data.provider !== "research_agent") {
-    throw new Error(`Konfigurasi agen riset "${source.slug}" tidak valid.`);
-  }
-  const config = parsed.data;
+  options: ResearchOptions,
+): Promise<ResearchResult> {
   const { FIRECRAWL_API_KEY: firecrawlKey, OPENROUTER_API_KEY: apiKey } =
     deps.env;
   if (!firecrawlKey) throw new Error("FIRECRAWL_API_KEY belum diatur.");
   if (!apiKey) throw new Error("OPENROUTER_API_KEY belum diatur.");
   const model = deps.env.OPENROUTER_MODEL ?? DEFAULT_MODEL;
   const nowIso = options.now.toISOString();
+  const subject = spec.subject;
   const rules = {
-    officialDomains: config.official_domains,
-    reputableDomains: config.reputable_domains ?? DEFAULT_REPUTABLE_DOMAINS,
+    officialDomains: spec.officialDomains,
+    reputableDomains: spec.reputableDomains,
   };
-  const recencyOf = new Map<string, Recency | undefined>();
-  const queries = config.queries.map((entry) => {
-    const q = typeof entry === "string" ? entry : entry.q;
-    recencyOf.set(q, typeof entry === "string" ? undefined : entry.recency);
-    return q;
-  });
+  const recencyOf = new Map(spec.queries.map((q) => [q.q, q.recency]));
 
-  // --- Subjek -------------------------------------------------------------
-  let subject: {
-    subject_type: "track" | "opportunity";
-    subject_key: string;
-    track: Database["public"]["Enums"]["track"] | null;
-    opportunity_id: string | null;
-  };
-  if (config.subject.type === "track") {
-    subject = {
-      subject_type: "track",
-      subject_key: `track:${config.subject.track}`,
-      track: config.subject.track,
-      opportunity_id: null,
-    };
-  } else {
-    const { data, error } = await db
-      .from("opportunities")
-      .select("id")
-      .eq("slug", config.subject.opportunity_slug)
-      .maybeSingle();
-    if (error) throw new Error(`Gagal membaca peluang: ${error.message}`);
-    if (!data)
-      throw new Error(
-        `Peluang "${config.subject.opportunity_slug}" tidak ditemukan.`,
-      );
-    subject = {
-      subject_type: "opportunity",
-      subject_key: `opportunity:${data.id}`,
-      track: null,
-      opportunity_id: data.id,
-    };
-  }
-
-  const stats: ResearchStats = {
-    queries: 0,
-    pagesFound: 0,
-    pagesRead: 0,
-    pagesUnchanged: 0,
-    pagesFailed: 0,
-    pagesSkipped: 0,
-    claimsExtracted: 0,
-    claimsRejected: 0,
-    claimsDropped: 0,
-    accepted: 0,
-    disputed: 0,
-    proposed: 0,
-    partial: false,
-    errors: [],
-    timingsMs: { search: 0, fetch: 0, extract: 0, verify: 0, brief: 0 },
-    brief: "dilewati",
-    pages: [],
-  };
+  const stats = emptyStats();
   const note = (message: string) => {
     if (stats.errors.length < 8) stats.errors.push(message);
   };
@@ -229,9 +220,9 @@ export async function runResearch(
   // --- 1-2. Kumpulkan: cari → baca → ekstrak (tahan banting; lihat gather.ts) ----
   const doFetch = deps.fetch;
   const gatheredResult = await gatherClaims({
-    queries,
-    seedUrls: config.seed_urls,
-    maxPages: config.max_pages,
+    queries: spec.queries.map((q) => q.q),
+    seedUrls: spec.seedUrls,
+    maxPages: spec.maxPages,
     rules,
     // Sisakan waktu untuk pemeriksaan fakta & penyusunan panduan.
     deadlineMs: options.deadlineMs - POST_GATHER_RESERVE_MS,
@@ -239,7 +230,7 @@ export async function runResearch(
     search: (query) =>
       searchWeb(query, {
         apiKey: firecrawlKey,
-        limit: config.results_per_query,
+        limit: spec.resultsPerQuery,
         fetch: doFetch,
         recency: recencyOf.get(query),
       }),
@@ -247,33 +238,26 @@ export async function runResearch(
       // Dry-run tidak menyimpan apa pun, dan reset membangun ulang: keduanya wajib membaca ulang semua halaman.
       if (options.dryRun || options.reset) return new Map<string, string>();
       const { data, error } = await db
-        .from("source_pages")
+        .from("research_pages")
         .select("url, content_hash")
-        .eq("source_id", source.id)
+        .eq("subject_key", subject.subject_key)
         .in("url", urls);
       if (error)
         throw new Error(`Gagal membaca riwayat halaman: ${error.message}`);
-      return new Map(
-        (data ?? []).flatMap((p) =>
-          p.content_hash ? [[p.url, p.content_hash] as const] : [],
-        ),
-      );
+      return new Map((data ?? []).map((p) => [p.url, p.content_hash] as const));
     },
     fetchPage: async (url) =>
       (
         await fetchPageTextWithFallback(url, {
           fetch: doFetch,
           firecrawlKey,
-          maxChars: config.max_chars,
+          maxChars: spec.maxChars,
         })
       ).text,
     extract: (text) =>
       extractClaims(
         text,
-        {
-          description: config.description,
-          fields: config.fields ?? CLAIM_FIELD_NAMES,
-        },
+        { description: spec.description, fields: spec.fields },
         { apiKey, model, fetch: doFetch, now: options.now },
       ),
   });
@@ -293,7 +277,7 @@ export async function runResearch(
       const started = Date.now();
       const check = await verifyClaims(
         collected,
-        { description: config.description },
+        { description: spec.description },
         { apiKey, model, fetch: doFetch, now: options.now },
       );
       stats.timingsMs.verify = Date.now() - started;
@@ -311,6 +295,20 @@ export async function runResearch(
       stats.claimsDropped = dropped.length;
     }
   }
+
+  const composeBrief = async (claims: BriefClaim[]) => {
+    const started = Date.now();
+    const guide = await synthesizeBrief(
+      claims,
+      { description: spec.description },
+      { apiKey, model, fetch: doFetch, now: options.now },
+    ).catch((e: unknown) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message.slice(0, 120) : "gagal",
+    }));
+    stats.timingsMs.brief = Date.now() - started;
+    return guide;
+  };
 
   // --- 3a. Dry-run: nilai di memori saja ------------------------------------
   if (options.dryRun) {
@@ -348,14 +346,13 @@ export async function runResearch(
 
     const decided = [...groups.values()].map((group) => {
       const update = updates.find((u) => u.id === group.row.id);
-      const evidence = summarizeEvidence(
-        group.items.map((i) => ({
-          domain: i.domain,
-          tier: i.tier,
-          quote: i.quote,
-          asOf: i.asOf,
-        })),
-      );
+      const evidence = group.items.map((i) => ({
+        url: i.url,
+        domain: i.domain,
+        tier: i.tier,
+        quote: i.quote,
+        asOf: i.asOf,
+      }));
       return {
         id: group.row.id,
         field: group.row.field,
@@ -363,7 +360,8 @@ export async function runResearch(
         summary: group.items[0]?.summary ?? "",
         status: update?.status ?? "proposed",
         confidence: update?.confidence ?? 0,
-        ...evidence,
+        evidenceRows: evidence,
+        ...summarizeEvidence(evidence),
       };
     });
     stats.claims = decided
@@ -385,16 +383,7 @@ export async function runResearch(
         : [],
     );
     if (briefClaims.length > 0 && Date.now() < options.deadlineMs - 15_000) {
-      const started = Date.now();
-      const guide = await synthesizeBrief(
-        briefClaims,
-        { description: config.description },
-        { apiKey, model, fetch: doFetch, now: options.now },
-      ).catch((e: unknown) => ({
-        ok: false as const,
-        error: e instanceof Error ? e.message.slice(0, 120) : "gagal",
-      }));
-      stats.timingsMs.brief = Date.now() - started;
+      const guide = await composeBrief(briefClaims);
       if (guide.ok) {
         stats.guide = guide.value;
         stats.brief = "dibuat (dry-run, tidak disimpan)";
@@ -402,7 +391,19 @@ export async function runResearch(
         stats.brief = `gagal: ${guide.error}`;
       }
     }
-    return stats;
+    const final: FactClaim[] = decided.map((d) => ({
+      id: d.id,
+      field: d.field,
+      value: d.value,
+      status: d.status,
+      confidence: d.confidence,
+      evidence: d.evidenceRows.map((e) => ({
+        url: e.url,
+        tier: e.tier,
+        asOf: e.asOf,
+      })),
+    }));
+    return { stats, final };
   }
 
   // --- 3b. Simpan klaim + bukti ---------------------------------------------
@@ -500,16 +501,19 @@ export async function runResearch(
   }
 
   if (readPages.length > 0) {
+    const reportByUrl = new Map(reports.map((r) => [r.url, r]));
     must(
-      await db.from("source_pages").upsert(
+      await db.from("research_pages").upsert(
         readPages.map((p) => ({
-          source_id: source.id,
+          subject_key: subject.subject_key,
           url: p.url,
           content_hash: p.hash,
+          page_date: reportByUrl.get(p.url)?.lastUpdated ?? null,
+          outcome: reportByUrl.get(p.url)?.outcome ?? "read",
           last_fetched_at: nowIso,
           last_changed_at: nowIso,
         })),
-        { onConflict: "source_id,url" },
+        { onConflict: "subject_key,url" },
       ),
       "Gagal menyimpan riwayat halaman",
     );
@@ -518,9 +522,9 @@ export async function runResearch(
   // Halaman yang tidak berubah → klaim yang bersumber darinya dianggap terverifikasi ulang.
   if (unchangedUrls.length > 0) {
     await db
-      .from("source_pages")
+      .from("research_pages")
       .update({ last_fetched_at: nowIso })
-      .eq("source_id", source.id)
+      .eq("subject_key", subject.subject_key)
       .in("url", unchangedUrls);
     const { data: rows } = await db
       .from("claim_evidence")
@@ -543,7 +547,7 @@ export async function runResearch(
     await db
       .from("claims")
       .select(
-        "id, field, value, summary, value_key, status, confidence, decided_by, claim_evidence(source_domain, source_tier, stance, quote, page_date)",
+        "id, field, value, summary, value_key, status, confidence, decided_by, claim_evidence(source_url, source_domain, source_tier, stance, quote, page_date)",
       )
       .eq("subject_key", subject.subject_key),
     "Gagal membaca klaim subjek",
@@ -565,7 +569,8 @@ export async function runResearch(
       "Gagal membersihkan klaim tanpa bukti",
     );
   }
-  const live = all.filter((row) => !orphanIds.includes(row.id));
+  const orphanSet = new Set(orphanIds);
+  const live = all.filter((row) => !orphanSet.has(row.id));
 
   const rows: SubjectClaimRow[] = live.map((row) => ({
     id: row.id,
@@ -593,8 +598,24 @@ export async function runResearch(
   }
   tally(stats, updates);
 
-  // --- 5. Panduan akhir: disusun ulang hanya bila klaim berubah -----------------
   const finalById = new Map(updates.map((u) => [u.id, u]));
+  const final: FactClaim[] = live.map((row) => {
+    const update = finalById.get(row.id);
+    return {
+      id: row.id,
+      field: row.field,
+      value: row.value,
+      status: update?.status ?? row.status,
+      confidence: update?.confidence ?? row.confidence,
+      evidence: row.claim_evidence.map((e) => ({
+        url: e.source_url,
+        tier: e.source_tier as SourceTier,
+        asOf: e.page_date,
+      })),
+    };
+  });
+
+  // --- 5. Panduan akhir: disusun ulang hanya bila klaim berubah -----------------
   const briefClaims: BriefClaim[] = live.flatMap((row) => {
     const update = finalById.get(row.id);
     const status = update?.status ?? row.status;
@@ -609,6 +630,7 @@ export async function runResearch(
         confidence: update?.confidence ?? row.confidence,
         ...summarizeEvidence(
           row.claim_evidence.map((e) => ({
+            url: e.source_url,
             domain: e.source_domain,
             tier: e.source_tier as SourceTier,
             quote: e.quote,
@@ -635,16 +657,7 @@ export async function runResearch(
     if (current?.input_hash === hash) {
       stats.brief = "tidak berubah";
     } else {
-      const started = Date.now();
-      const guide = await synthesizeBrief(
-        briefClaims,
-        { description: config.description },
-        { apiKey, model, fetch: doFetch, now: options.now },
-      ).catch((e: unknown) => ({
-        ok: false as const,
-        error: e instanceof Error ? e.message.slice(0, 120) : "gagal",
-      }));
-      stats.timingsMs.brief = Date.now() - started;
+      const guide = await composeBrief(briefClaims);
       if (guide.ok) {
         must(
           await db.from("subject_briefs").upsert(
@@ -670,7 +683,7 @@ export async function runResearch(
       }
     }
   }
-  return stats;
+  return { stats, final };
 }
 
 function tally(stats: ResearchStats, updates: Array<{ status: string }>) {
@@ -679,4 +692,110 @@ function tally(stats: ResearchStats, updates: Array<{ status: string }>) {
     else if (update.status === "disputed") stats.disputed += 1;
     else stats.proposed += 1;
   }
+}
+
+/** Menyimpan jejak run per subjek (untuk pemantauan admin dan penjadwalan riset ulang). */
+export async function recordSubjectState(
+  db: Db,
+  subject: ResearchSubject,
+  profile: FieldProfile,
+  outcome: {
+    status: "success" | "partial" | "failed";
+    stats?: ResearchStats;
+    error?: string;
+  },
+  now: Date,
+  nextRunAt: Date | null,
+): Promise<void> {
+  await db.from("research_subjects").upsert(
+    {
+      subject_key: subject.subject_key,
+      subject_type: subject.subject_type,
+      track: subject.track,
+      opportunity_id: subject.opportunity_id,
+      profile,
+      last_run_at: now.toISOString(),
+      last_status: outcome.status,
+      last_stats: (outcome.stats
+        ? compactStats(outcome.stats)
+        : { error: outcome.error ?? null }) as unknown as Json,
+      next_run_at: nextRunAt?.toISOString() ?? null,
+    },
+    { onConflict: "subject_key" },
+  );
+}
+
+/**
+ * Sumber `research_agent`: subjek & kueri ditetapkan di config sumber (mis. WHV 462, DAMA).
+ * Subjek peluang (beasiswa/program) umumnya diriset otomatis oleh `opportunity_research`.
+ */
+export async function runResearch(
+  db: Db,
+  source: IngestSource,
+  deps: ResearchDeps,
+  options: ResearchOptions,
+): Promise<ResearchStats> {
+  const parsed = sourceConfigSchema.safeParse(source.config);
+  if (!parsed.success || parsed.data.provider !== "research_agent") {
+    throw new Error(`Konfigurasi agen riset "${source.slug}" tidak valid.`);
+  }
+  const config = parsed.data;
+
+  let subject: ResearchSubject;
+  let profile: FieldProfile;
+  if (config.subject.type === "track") {
+    subject = {
+      subject_type: "track",
+      subject_key: `track:${config.subject.track}`,
+      track: config.subject.track,
+      opportunity_id: null,
+    };
+    profile = config.profile ?? "visa_program";
+  } else {
+    const { data, error } = await db
+      .from("opportunities")
+      .select("id, kind")
+      .eq("slug", config.subject.opportunity_slug)
+      .maybeSingle();
+    if (error) throw new Error(`Gagal membaca peluang: ${error.message}`);
+    if (!data)
+      throw new Error(
+        `Peluang "${config.subject.opportunity_slug}" tidak ditemukan.`,
+      );
+    subject = {
+      subject_type: "opportunity",
+      subject_key: `opportunity:${data.id}`,
+      track: null,
+      opportunity_id: data.id,
+    };
+    profile =
+      config.profile ??
+      (data.kind === "scholarship" ? "scholarship" : "job_program");
+  }
+
+  const spec: ResearchSpec = {
+    subject,
+    profile,
+    description: config.description,
+    queries: normalizeQueries(config.queries),
+    seedUrls: config.seed_urls,
+    officialDomains: config.official_domains,
+    reputableDomains: config.reputable_domains ?? DEFAULT_REPUTABLE_DOMAINS,
+    fields: config.fields ?? FIELD_PROFILES[profile],
+    maxPages: config.max_pages,
+    resultsPerQuery: config.results_per_query,
+    maxChars: config.max_chars,
+  };
+  const { stats } = await researchSubject(db, spec, deps, options);
+  if (!options.dryRun) {
+    await recordSubjectState(
+      db,
+      subject,
+      profile,
+      { status: stats.partial ? "partial" : "success", stats },
+      options.now,
+      null,
+    );
+  }
+  return stats;
 }

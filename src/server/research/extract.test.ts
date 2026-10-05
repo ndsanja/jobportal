@@ -65,10 +65,16 @@ describe("validateClaims", () => {
           },
           {
             field: "requirement.english",
+            value: { tests: [{ test: "OTHER", min_overall: null }] },
+            summary: "Bahasa Inggris fungsional",
+            evidence: "functional English",
+          }, // lolos
+          {
+            field: "requirement.english",
             value: { tests: [{ test: "IELTS", min_overall: 4.5 }] },
             summary: "IELTS 4.5",
             evidence: "functional English",
-          }, // lolos
+          }, // angka 4.5 tidak ada di kutipan
           {
             field: "requirement.education",
             value: { min_level: "s1" },
@@ -86,7 +92,52 @@ describe("validateClaims", () => {
       "Kutipan bukti tidak ditemukan di halaman",
       expect.stringContaining("Nilai tidak valid"),
       expect.stringContaining("Kode dokumen tidak dikenal"),
+      expect.stringContaining("Angka 4.5 tidak tertulis"),
       "Bidang tidak diizinkan",
+    ]);
+  });
+
+  it("tanggal jadwal wajib tertulis di kutipan dan berada di siklus berjalan", () => {
+    const text =
+      "Applications open 5 August 2026 and close 6 October 2026 at 11:00 UTC. The 2019 round closed 1 March 2019.";
+    const result = validateClaims(
+      {
+        claims: [
+          {
+            field: "schedule.event",
+            value: {
+              kind: "close",
+              date: "2026-10-06",
+              time: "11:00",
+              timezone: "UTC",
+              label: "Penutupan pendaftaran",
+            },
+            summary: "Pendaftaran ditutup 6 Oktober 2026 pukul 11.00 UTC",
+            evidence: "close 6 October 2026 at 11:00 UTC",
+          },
+          {
+            field: "schedule.event",
+            value: { kind: "open", date: "2026-08-15", label: "Pembukaan" },
+            summary: "Dibuka 15 Agustus 2026",
+            evidence: "Applications open 5 August 2026",
+          },
+          {
+            field: "schedule.event",
+            value: { kind: "close", date: "2019-03-01", label: "Lama" },
+            summary: "Ditutup 1 Maret 2019",
+            evidence: "The 2019 round closed 1 March 2019",
+          },
+        ],
+      },
+      text,
+      ["schedule.event"],
+      new Date("2026-10-01"),
+    );
+    if ("error" in result) throw new Error(result.error);
+    expect(result.claims).toHaveLength(1);
+    expect(result.rejected.map((r) => r.reason)).toEqual([
+      expect.stringContaining("2026-08-15"),
+      "Tanggal di luar siklus berjalan",
     ]);
   });
 

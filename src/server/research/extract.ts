@@ -5,6 +5,7 @@ import {
   parseClaimValue,
 } from "@/domain/claims";
 import { DOCUMENT_TYPE_CODES } from "@/domain/documents";
+import { groundingError } from "@/domain/grounding";
 import { findPageDate } from "@/domain/page-date";
 import {
   evidenceInText,
@@ -12,7 +13,7 @@ import {
 } from "@/domain/scholarship-extraction";
 import { callJsonModel, type FetchLike } from "@/server/ai/json-call";
 
-export const RESEARCH_PROMPT_VERSION = "claims-v2";
+export const RESEARCH_PROMPT_VERSION = "claims-v3";
 
 export type CandidateClaim = {
   field: ClaimField;
@@ -33,17 +34,69 @@ export type PageMeta = {
   note: string;
 };
 
-const SYSTEM_PROMPT = `Anda adalah mesin pengekstrak FAKTA dari teks satu halaman web untuk sebuah subjek (program/visa/beasiswa). Balas HANYA dengan satu objek JSON.
+/** Panduan bentuk nilai per bidang; prompt hanya memuat bidang yang diizinkan untuk subjek. */
+const FIELD_GUIDE: Record<ClaimField, string> = {
+  "eligibility.indonesia":
+    '{"eligible": true|false, "note": "opsional"} — apakah warga/pemegang paspor Indonesia BOLEH mendaftar. true hanya bila teks menyebut Indonesia termasuk negara yang memenuhi syarat ATAU program terbuka untuk semua kewarganegaraan/negara berkembang yang mencakup Indonesia; false bila teks menyatakan Indonesia tidak termasuk.',
+  "requirement.age":
+    '{"min": angka atau null, "max": angka atau null} — batas usia pemohon.',
+  "requirement.english":
+    '{"tests": [{"test": "IELTS|TOEFL_IBT|PTE|TOEFL_ITP|OTHER", "min_overall": angka atau null}], "note": "opsional"}',
+  "requirement.gpa":
+    '{"min": angka, "scale": angka} — IPK minimum, mis. {"min": 3.0, "scale": 4}.',
+  "requirement.document": `{"doc_type": "<kode>", "note": "opsional"}  kode: ${DOCUMENT_TYPE_CODES.join(", ")}`,
+  "requirement.funds":
+    '{"amount": angka, "currency": "kode ISO 3 huruf"} — dana/tabungan minimum yang harus dimiliki pemohon.',
+  "requirement.experience_years":
+    '{"min": angka} — pengalaman kerja minimum (tahun).',
+  "requirement.education":
+    '{"min_level": "sma|d3|d4|s1|s2|s3"} — pendidikan minimum.',
+  "requirement.nationality":
+    '{"countries": ["ID", ...]} — daftar negara yang memenuhi syarat (kode ISO 2 huruf) bila tertulis.',
+  "requirement.other":
+    '{"text": "syarat pemohon lain (kesehatan, karakter, tanpa tanggungan, belum pernah menerima beasiswa ini, dsb.)"}',
+  "schedule.event":
+    '{"kind": "open|close|test|interview|announcement|start|ballot_open|ballot_close|other", "date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD atau null", "time": "HH:MM atau null", "timezone": "mis. UTC, GMT, WIB, AEST, Asia/Jakarta atau null", "label": "nama tahap, mis. Penutupan pendaftaran siklus 2027"} — HANYA tanggal yang tertulis lengkap (tanggal, bulan, tahun) untuk siklus berjalan/berikutnya; termasuk yang baru saja lewat pada siklus berjalan. Jangan menebak tahun.',
+  "funding.type":
+    '{"type": "full|partial|tuition|stipend|varies"} — penuh, parsial, hanya biaya kuliah, hanya tunjangan, atau bervariasi per program.',
+  "funding.coverage":
+    '{"item": "tuition|living_allowance|accommodation|flight|insurance|settlement|research|language_course|book|visa|other", "note": "opsional"} — satu klaim per komponen yang ditanggung.',
+  "benefit.amount":
+    '{"amount": angka, "currency": "kode ISO 3 huruf", "period": "once|month|year|null", "label": "mis. tunjangan hidup bulanan"} — nilai uang manfaat/gaji.',
+  "study.level":
+    '{"level": "bachelor|master|doctoral|postdoc|non_degree|vocational"} — satu klaim per jenjang yang dibuka.',
+  "study.field": '{"text": "bidang studi yang dibuka/diprioritaskan"}',
+  "program.quota":
+    '{"count": angka, "note": "opsional"} — jumlah penerima/kuota.',
+  "obligation.return":
+    '{"text": "kewajiban setelah program, mis. kembali ke Indonesia minimal 2 tahun / ikatan dinas"}',
+  "process.application_mode":
+    '{"mode": "ballot|open|invitation_only|nomination|other", "note": "opsional"} — cara masuk proses: wajib ballot/undian dulu, langsung mendaftar, hanya undangan, atau lewat nominasi (kampus/kedutaan/instansi).',
+  "process.ballot":
+    '{"text": "detail ballot: pendaftaran, jadwal, undangan, batas waktu, biaya ballot, kuota"}',
+  "process.step": '{"text": "satu tahap proses pendaftaran, urut jika ada"}',
+  "process.timeline":
+    '{"text": "jangka waktu penting yang bukan tanggal pasti: lama proses, masa berlaku, durasi program"}',
+  "fee.application":
+    '{"amount": angka, "currency": "kode ISO 3 huruf", "note": "opsional, mis. biaya visa/biaya pendaftaran"}',
+  "condition.stay":
+    '{"text": "ketentuan setelah visa/program diberikan: batas kerja, lama tinggal, kondisi visa"}',
+};
+
+const buildSystemPrompt = (
+  fields: ClaimField[],
+) => `Anda adalah mesin pengekstrak FAKTA dari teks satu halaman web untuk sebuah subjek (program/visa/beasiswa/lowongan). Balas HANYA dengan satu objek JSON.
 
 Prinsip: akurasi di atas kelengkapan. Lebih baik melewatkan fakta daripada memuat fakta yang salah, usang, atau milik negara/program lain.
 
 Aturan ketat:
 1. Gunakan hanya informasi yang tertulis di teks. Jangan menebak atau memakai pengetahuan di luar teks.
-2. Ekstrak hanya fakta untuk SUBJEK yang disebutkan dan BERLAKU bagi pemohon paspor/warga Indonesia. Bila halaman membedakan per negara (mis. ada daftar negara, ballot untuk negara tertentu, tabel per kebangsaan), ambil hanya baris/aturan untuk Indonesia atau yang berlaku umum bagi semua negara. Lewati aturan khusus negara lain.
-3. Perhatikan waktu. "Hari ini" diberikan. Lewati fakta yang di teks dinyatakan sudah lewat/dicabut/berlaku sampai tanggal yang telah lewat. Jika halaman sendiri menyatakan arsip/usang/digantikan, set page.outdated=true dan jangan ekstrak klaim.
+2. Ekstrak hanya fakta untuk SUBJEK yang disebutkan dan BERLAKU bagi pemohon paspor/warga Indonesia. Bila halaman membedakan per negara (daftar negara, ballot untuk negara tertentu, tabel per kebangsaan), ambil hanya aturan untuk Indonesia atau yang berlaku umum. Lewati aturan khusus negara lain dan program lain di halaman yang sama.
+3. Perhatikan waktu. "Hari ini" diberikan. Lewati fakta yang di teks dinyatakan sudah dicabut/tidak berlaku lagi, atau milik siklus yang sudah lama lewat. Jika halaman sendiri menyatakan arsip/usang/digantikan, set page.outdated=true dan jangan ekstrak klaim.
 4. Setiap klaim WAJIB punya "evidence": salinan PERSIS (kata per kata) satu kalimat/frasa dari teks yang secara langsung memuat fakta itu. Jangan menggabung dua bagian teks.
-5. Satu klaim = satu fakta. Pisahkan fakta berbeda. Jangan mengulang fakta yang sama dengan kalimat berbeda dalam satu halaman.
-6. Jika ragu apakah fakta berlaku untuk Indonesia atau masih berlaku, JANGAN ekstrak.
+5. SEMUA angka dan tanggal di "value" harus tertulis di "evidence" persis (validator otomatis menolak yang tidak cocok). Jangan mengonversi mata uang atau menghitung.
+6. Satu klaim = satu fakta. Pisahkan fakta berbeda. Jangan mengulang fakta yang sama dengan kalimat berbeda dalam satu halaman.
+7. Jika ragu apakah fakta berlaku untuk Indonesia atau masih berlaku, JANGAN ekstrak.
 
 Objek "page":
 - about_subject: true/false — halaman benar-benar membahas subjek.
@@ -53,25 +106,12 @@ Objek "page":
 - outdated: true bila halaman menyatakan dirinya usang/diarsipkan/digantikan.
 - note: satu kalimat tentang jenis halaman (maks 150 karakter).
 
-Bidang klaim dan bentuk "value":
-- requirement.age: {"min": angka atau null, "max": angka atau null}
-- requirement.english: {"tests": [{"test": "IELTS|TOEFL_IBT|PTE|TOEFL_ITP|OTHER", "min_overall": angka atau null}], "note": "opsional"}
-- requirement.document: {"doc_type": "<kode>", "note": "opsional"}  kode: ${DOCUMENT_TYPE_CODES.join(", ")}
-- requirement.funds: {"amount": angka, "currency": "AUD"}
-- requirement.experience_years: {"min": angka}
-- requirement.education: {"min_level": "sma|d3|d4|s1|s2|s3"}
-- requirement.nationality: {"countries": ["ID"]}
-- requirement.other: {"text": "syarat pemohon lain (kesehatan, karakter, tanpa tanggungan, dsb.)"}
-- process.application_mode: {"mode": "ballot|open|invitation_only|other", "note": "opsional"} — cara pemohon dari Indonesia masuk ke proses (mis. wajib ikut ballot/undian dulu atau langsung mengajukan).
-- process.ballot: {"text": "detail ballot: pendaftaran, jadwal, undangan, batas waktu, biaya ballot, jumlah kuota"}
-- process.step: {"text": "satu tahap proses pengajuan, urut jika ada"}
-- process.timeline: {"text": "tanggal/jangka waktu penting: pembukaan, penutupan, lama proses, masa berlaku"}
-- fee.application: {"amount": angka, "currency": "AUD", "note": "opsional, mis. biaya visa/biaya ballot"}
-- condition.stay: {"text": "ketentuan setelah visa diberikan: batas kerja per pemberi kerja, lama tinggal, kondisi visa"}
+Bidang klaim yang diizinkan dan bentuk "value":
+${fields.map((field) => `- ${field}: ${FIELD_GUIDE[field]}`).join("\n")}
 
 Format keluaran:
 {"page": {"about_subject": true, "applies_to_indonesia": "general", "last_updated": null, "last_updated_evidence": null, "outdated": false, "note": "..."},
- "claims": [{"field": "requirement.age", "value": {"min": 18, "max": 30}, "summary": "Ringkasan Bahasa Indonesia (maks 200 karakter)", "evidence": "kutipan persis dari teks", "applies_to": "indonesia|general"}]}`;
+ "claims": [{"field": "${fields[0] ?? "requirement.other"}", "value": {}, "summary": "Ringkasan Bahasa Indonesia (maks 200 karakter)", "evidence": "kutipan persis dari teks", "applies_to": "indonesia|general"}]}`;
 
 export type ClaimExtraction =
   | {
@@ -126,6 +166,7 @@ export function validateClaims(
   json: unknown,
   pageText: string,
   allowedFields: ClaimField[],
+  now: Date = new Date(),
 ): { claims: CandidateClaim[]; rejected: Rejection[] } | { error: string } {
   const list = (json as { claims?: unknown } | null)?.claims;
   if (!Array.isArray(list))
@@ -181,6 +222,27 @@ export function validateClaims(
         return;
       }
     }
+    const grounding = groundingError(
+      item.field,
+      value.value,
+      item.evidence,
+      pageText,
+    );
+    if (grounding) {
+      rejected.push({ path, reason: grounding });
+      return;
+    }
+    if (item.field === "schedule.event") {
+      const date = Date.parse((value.value as { date: string }).date);
+      const day = 86_400_000;
+      if (
+        date < now.getTime() - 400 * day ||
+        date > now.getTime() + 3 * 365 * day
+      ) {
+        rejected.push({ path, reason: "Tanggal di luar siklus berjalan" });
+        return;
+      }
+    }
     const summary =
       typeof item.summary === "string" ? item.summary.trim().slice(0, 300) : "";
     if (summary.length < 5) {
@@ -209,7 +271,7 @@ export async function extractClaims(
 
   const result = await callJsonModel(
     [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: buildSystemPrompt(fields) },
       {
         role: "user",
         content: `Subjek: ${subject.description}\nHari ini: ${now.toISOString().slice(0, 10)}\n\nTEKS HALAMAN:\n"""\n${pageText}\n"""`,
@@ -222,7 +284,7 @@ export async function extractClaims(
       maxTokens: 6000,
     },
     (json) => {
-      const checked = validateClaims(json, pageText, fields);
+      const checked = validateClaims(json, pageText, fields, now);
       return "error" in checked
         ? { ok: false, error: checked.error }
         : {

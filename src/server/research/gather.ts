@@ -258,7 +258,7 @@ export async function gatherClaims(params: GatherParams): Promise<{
       collected.push({
         field: claim.field,
         value: claim.value,
-        valueKey: valueKey(claim.value),
+        valueKey: valueKey(claim.value, claim.field),
         summary: claim.summary,
         quote: claim.evidence,
         url: page.url,

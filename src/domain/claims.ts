@@ -7,7 +7,61 @@ import { normalizeForMatch } from "./scholarship-extraction";
 
 const edu = z.enum(["sma", "d3", "d4", "s1", "s2", "s3"]);
 
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD")
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00Z`);
+    return (
+      !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+    );
+  }, "Tanggal tidak valid");
+
+export const SCHEDULE_EVENT_KINDS = [
+  "open",
+  "close",
+  "test",
+  "interview",
+  "announcement",
+  "start",
+  "ballot_open",
+  "ballot_close",
+  "other",
+] as const;
+export const FUNDING_TYPES = [
+  "full",
+  "partial",
+  "tuition",
+  "stipend",
+  "varies",
+] as const;
+export const FUNDING_ITEMS = [
+  "tuition",
+  "living_allowance",
+  "accommodation",
+  "flight",
+  "insurance",
+  "settlement",
+  "research",
+  "language_course",
+  "book",
+  "visa",
+  "other",
+] as const;
+export const STUDY_LEVEL_VALUES = [
+  "bachelor",
+  "master",
+  "doctoral",
+  "postdoc",
+  "non_degree",
+  "vocational",
+] as const;
+
 export const CLAIM_FIELDS = {
+  "eligibility.indonesia": z.object({
+    eligible: z.boolean(),
+    note: z.string().max(200).optional(),
+  }),
   "requirement.age": z
     .object({
       min: z.number().int().min(0).max(100).nullable(),
@@ -25,6 +79,12 @@ export const CLAIM_FIELDS = {
       .min(1),
     note: z.string().max(200).optional(),
   }),
+  "requirement.gpa": z
+    .object({
+      min: z.number().positive().max(100),
+      scale: z.number().positive().max(100),
+    })
+    .refine((v) => v.min <= v.scale, "IPK minimum melebihi skala"),
   "requirement.document": z.object({
     doc_type: z.string().min(2).max(60),
     note: z.string().max(200).optional(),
@@ -39,9 +99,49 @@ export const CLAIM_FIELDS = {
     countries: z.array(z.string().length(2)).min(1),
   }),
   "requirement.other": z.object({ text: z.string().min(5).max(250) }),
+  // Jadwal (menjadi event kalender peluang bila diterima dari sumber resmi).
+  "schedule.event": z
+    .object({
+      kind: z.enum(SCHEDULE_EVENT_KINDS),
+      date: isoDate,
+      end_date: isoDate.nullable().optional(),
+      time: z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Format jam harus HH:MM")
+        .nullable()
+        .optional(),
+      timezone: z.string().min(1).max(40).nullable().optional(),
+      label: z.string().min(3).max(120),
+    })
+    .refine(
+      (v) => !v.end_date || v.end_date >= v.date,
+      "Tanggal akhir sebelum tanggal mulai",
+    ),
+  // Pendanaan & program (beasiswa).
+  "funding.type": z.object({
+    type: z.enum(FUNDING_TYPES),
+    note: z.string().max(200).optional(),
+  }),
+  "funding.coverage": z.object({
+    item: z.enum(FUNDING_ITEMS),
+    note: z.string().max(200).optional(),
+  }),
+  "benefit.amount": z.object({
+    amount: z.number().positive(),
+    currency: z.string().length(3),
+    period: z.enum(["once", "month", "year"]).nullable(),
+    label: z.string().min(3).max(120),
+  }),
+  "study.level": z.object({ level: z.enum(STUDY_LEVEL_VALUES) }),
+  "study.field": z.object({ text: z.string().min(2).max(150) }),
+  "program.quota": z.object({
+    count: z.number().int().positive(),
+    note: z.string().max(200).optional(),
+  }),
+  "obligation.return": z.object({ text: z.string().min(5).max(250) }),
   // Proses & ketentuan (bukan syarat pemohon): dipakai untuk panduan lengkap.
   "process.application_mode": z.object({
-    mode: z.enum(["ballot", "open", "invitation_only", "other"]),
+    mode: z.enum(["ballot", "open", "invitation_only", "nomination", "other"]),
     note: z.string().max(200).optional(),
   }),
   "process.ballot": z.object({ text: z.string().min(5).max(250) }),
@@ -59,18 +159,28 @@ export type ClaimField = keyof typeof CLAIM_FIELDS;
 export const CLAIM_FIELD_NAMES = Object.keys(CLAIM_FIELDS) as ClaimField[];
 
 export const CLAIM_FIELD_LABEL: Record<ClaimField, string> = {
+  "eligibility.indonesia": "Terbuka untuk WNI",
   "requirement.age": "Usia",
   "requirement.english": "Bahasa Inggris",
+  "requirement.gpa": "IPK",
   "requirement.document": "Dokumen",
   "requirement.funds": "Dana",
   "requirement.experience_years": "Pengalaman kerja",
   "requirement.education": "Pendidikan",
   "requirement.nationality": "Kewarganegaraan",
   "requirement.other": "Syarat lain",
+  "schedule.event": "Jadwal",
+  "funding.type": "Jenis pendanaan",
+  "funding.coverage": "Cakupan pendanaan",
+  "benefit.amount": "Nilai manfaat",
+  "study.level": "Jenjang",
+  "study.field": "Bidang studi",
+  "program.quota": "Kuota",
+  "obligation.return": "Kewajiban setelah program",
   "process.application_mode": "Cara mendaftar",
   "process.ballot": "Ballot",
   "process.step": "Tahapan",
-  "process.timeline": "Jadwal",
+  "process.timeline": "Lini waktu",
   "fee.application": "Biaya",
   "condition.stay": "Ketentuan setelah visa",
 };
@@ -79,15 +189,89 @@ export const CLAIM_FIELD_LABEL: Record<ClaimField, string> = {
 export const MULTI_VALUED_FIELDS: ReadonlySet<string> = new Set([
   "requirement.other",
   "requirement.document",
+  "schedule.event",
+  "funding.coverage",
+  "benefit.amount",
+  "study.level",
+  "study.field",
+  "obligation.return",
   "process.ballot",
   "process.step",
   "process.timeline",
   "condition.stay",
 ]);
 
+/**
+ * Profil bidang per jenis subjek: hanya bidang ini yang boleh diekstrak AI untuk subjek tersebut,
+ * sehingga prompt lebih fokus dan fakta di luar konteks (mis. "kuota" pada visa) tidak muncul.
+ */
+export type FieldProfile = "visa_program" | "scholarship" | "job_program";
+export const FIELD_PROFILES: Record<FieldProfile, ClaimField[]> = {
+  visa_program: [
+    "eligibility.indonesia",
+    "requirement.age",
+    "requirement.english",
+    "requirement.document",
+    "requirement.funds",
+    "requirement.experience_years",
+    "requirement.education",
+    "requirement.nationality",
+    "requirement.other",
+    "process.application_mode",
+    "process.ballot",
+    "process.step",
+    "process.timeline",
+    "schedule.event",
+    "fee.application",
+    "condition.stay",
+  ],
+  scholarship: [
+    "eligibility.indonesia",
+    "schedule.event",
+    "funding.type",
+    "funding.coverage",
+    "benefit.amount",
+    "study.level",
+    "study.field",
+    "program.quota",
+    "obligation.return",
+    "requirement.age",
+    "requirement.english",
+    "requirement.gpa",
+    "requirement.education",
+    "requirement.experience_years",
+    "requirement.document",
+    "requirement.nationality",
+    "requirement.other",
+    "process.application_mode",
+    "process.step",
+    "process.timeline",
+    "fee.application",
+  ],
+  job_program: [
+    "eligibility.indonesia",
+    "schedule.event",
+    "benefit.amount",
+    "program.quota",
+    "requirement.age",
+    "requirement.english",
+    "requirement.education",
+    "requirement.experience_years",
+    "requirement.document",
+    "requirement.funds",
+    "requirement.other",
+    "process.application_mode",
+    "process.step",
+    "process.timeline",
+    "fee.application",
+    "condition.stay",
+    "obligation.return",
+  ],
+};
+
 /** Bidang yang dinilai terhadap profil pengguna (kesiapan). */
 export const isRequirementField = (field: string) =>
-  field.startsWith("requirement.");
+  field.startsWith("requirement.") || field === "eligibility.indonesia";
 
 export const isClaimField = (value: string): value is ClaimField =>
   value in CLAIM_FIELDS;
@@ -127,9 +311,32 @@ const canonical = (value: unknown): unknown => {
     : value;
 };
 
+/**
+ * Sifat yang menentukan identitas klaim per bidang. Label/jam/catatan tidak membedakan dua klaim:
+ * "Penutupan 6 Okt 2026" dan "Deadline 6 Oktober 2026" adalah fakta yang sama.
+ */
+const IDENTITY_PROPS: Partial<Record<ClaimField, string[]>> = {
+  "eligibility.indonesia": ["eligible"],
+  "schedule.event": ["kind", "date"],
+  "funding.type": ["type"],
+  "funding.coverage": ["item"],
+  "benefit.amount": ["amount", "currency", "period"],
+  "program.quota": ["count"],
+  "process.application_mode": ["mode"],
+  "fee.application": ["amount", "currency"],
+};
+
 /** Kunci stabil untuk nilai klaim: dua nilai yang sama secara makna menghasilkan kunci yang sama. */
-export const valueKey = (value: unknown): string =>
-  JSON.stringify(canonical(value));
+export const valueKey = (value: unknown, field?: string): string => {
+  const props = field ? IDENTITY_PROPS[field as ClaimField] : undefined;
+  if (props && value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return JSON.stringify(
+      canonical(Object.fromEntries(props.map((p) => [p, record[p] ?? null]))),
+    );
+  }
+  return JSON.stringify(canonical(value));
+};
 
 export const quoteKey = (quote: string): string =>
   normalizeForMatch(quote).slice(0, 200);
@@ -160,7 +367,7 @@ export const DEFAULT_REPUTABLE_DOMAINS = [
 
 // Pemerintah: hanya pola yang jelas milik pemerintah.
 const GOVERNMENT_HOST =
-  /(^|\.)(gov|gov\.[a-z]{2}|go\.id|europa\.eu|admin\.ch)$/;
+  /(^|\.)(gov|gov\.[a-z]{2}|go\.[a-z]{2}|govt\.[a-z]{2}|gouv\.[a-z]{2}|gob\.[a-z]{2}|gc\.ca|canada\.ca|europa\.eu|admin\.ch|bund\.de|government\.nl)$/;
 
 const hostOf = (url: string): string | null => {
   try {

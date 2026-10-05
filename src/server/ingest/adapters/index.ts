@@ -31,11 +31,6 @@ export async function runAdapter(
       return fetchLever(config, deps.fetch);
     case "ashby":
       return fetchAshby(config, deps.fetch);
-    case "research_agent":
-    case "page_monitor":
-      throw new Error(
-        `Sumber "${source.slug}" adalah pemantau halaman, bukan adapter lowongan.`,
-      );
     case "smartrecruiters":
       return fetchSmartRecruiters(config, deps.fetch);
     case "adzuna": {
@@ -44,5 +39,9 @@ export async function runAdapter(
         throw new Error("ADZUNA_APP_ID / ADZUNA_APP_KEY belum diatur.");
       return fetchAdzuna(config, { appId, appKey }, deps.fetch);
     }
+    default:
+      throw new Error(
+        `Sumber "${source.slug}" (${config.provider}) bukan adapter lowongan.`,
+      );
   }
 }

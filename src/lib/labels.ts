@@ -3,6 +3,8 @@ export const STUDY_LEVEL_LABEL: Record<string, string> = {
   master: "Magister",
   doctoral: "Doktor",
   non_degree: "Non-gelar",
+  postdoc: "Pascadoktoral",
+  vocational: "Vokasi",
 };
 
 export const EVENT_KIND_LABEL: Record<string, string> = {
@@ -14,6 +16,7 @@ export const EVENT_KIND_LABEL: Record<string, string> = {
   ballot_open: "Ballot dibuka",
   ballot_close: "Ballot ditutup",
   start: "Mulai",
+  other: "Lainnya",
 };
 
 export const EVENT_KIND_TONE: Record<string, string> = {

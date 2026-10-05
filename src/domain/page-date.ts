@@ -40,9 +40,9 @@ const MONTHS: Record<string, number> = {
   desember: 12,
   des: 12,
 };
-const MONTH_RE = Object.keys(MONTHS)
+const MONTH_RE = `(?:${Object.keys(MONTHS)
   .sort((a, b) => b.length - a.length)
-  .join("|");
+  .join("|")})(?![a-z])`;
 
 const LABEL_RE =
   "(?:page\\s+)?(?:last\\s+(?:updated|modified|reviewed)|date\\s+modified|updated|modified|terakhir\\s+(?:diperbarui|diubah|diperbaharui)|diperbarui|pembaruan\\s+terakhir|diubah|published|date\\s+published|diterbitkan|tanggal\\s+terbit|date\\s+of\\s+effect|effective\\s+from)";
@@ -139,4 +139,95 @@ export function findHtmlMetaDate(
       best = iso;
   }
   return best;
+}
+
+const monthOf = (name: string): number =>
+  MONTHS[name.toLowerCase().replace(/\.$/, "")] as number;
+const RANGE_SEP =
+  "\\s*(?:–|—|-|to|until|till|sampai|hingga|s\\.?\\s?d\\.?)\\s*";
+const ORD = "(?:st|nd|rd|th)?";
+
+/**
+ * Semua tanggal lengkap (hari, bulan, tahun) yang tertulis di teks, termasuk rentang seperti
+ * "1–30 Juni 2026" atau "1 June – 30 July 2026". Dipakai untuk memastikan tanggal hasil AI
+ * benar-benar tertulis di kutipan sumber.
+ */
+export function datesInText(text: string): Set<string> {
+  const found = new Set<string>();
+  const add = (y: number, m: number, d: number) => {
+    const iso = toIso(y, m, d);
+    if (iso) found.add(iso);
+  };
+  const scan = (
+    pattern: string,
+    flags: string,
+    take: (m: RegExpExecArray) => void,
+  ) => {
+    for (const m of text.matchAll(new RegExp(pattern, flags)))
+      take(m as unknown as RegExpExecArray);
+  };
+  scan(`(\\d{1,2})${ORD}\\s+(${MONTH_RE})\\.?,?\\s+(\\d{4})`, "gi", (m) =>
+    add(Number(m[3]), monthOf(m[2] as string), Number(m[1])),
+  );
+  scan(`(${MONTH_RE})\\.?\\s+(\\d{1,2})${ORD},?\\s+(\\d{4})`, "gi", (m) =>
+    add(Number(m[3]), monthOf(m[1] as string), Number(m[2])),
+  );
+  scan("(\\d{4})-(\\d{2})-(\\d{2})", "g", (m) =>
+    add(Number(m[1]), Number(m[2]), Number(m[3])),
+  );
+  scan("(\\d{1,2})/(\\d{1,2})/(\\d{4})", "g", (m) =>
+    add(Number(m[3]), Number(m[2]), Number(m[1])),
+  );
+  // 1–30 Juni 2026
+  scan(
+    `(\\d{1,2})${ORD}${RANGE_SEP}(\\d{1,2})${ORD}\\s+(${MONTH_RE})\\.?,?\\s+(\\d{4})`,
+    "gi",
+    (m) => {
+      add(Number(m[4]), monthOf(m[3] as string), Number(m[1]));
+      add(Number(m[4]), monthOf(m[3] as string), Number(m[2]));
+    },
+  );
+  // 1 June – 30 July 2026
+  scan(
+    `(\\d{1,2})${ORD}\\s+(${MONTH_RE})\\.?${RANGE_SEP}(\\d{1,2})${ORD}\\s+(${MONTH_RE})\\.?,?\\s+(\\d{4})`,
+    "gi",
+    (m) => {
+      add(Number(m[5]), monthOf(m[2] as string), Number(m[1]));
+      add(Number(m[5]), monthOf(m[4] as string), Number(m[3]));
+    },
+  );
+  // June 1 – 30, 2026
+  scan(
+    `(${MONTH_RE})\\.?\\s+(\\d{1,2})${ORD}${RANGE_SEP}(\\d{1,2})${ORD},?\\s+(\\d{4})`,
+    "gi",
+    (m) => {
+      add(Number(m[4]), monthOf(m[1] as string), Number(m[2]));
+      add(Number(m[4]), monthOf(m[1] as string), Number(m[3]));
+    },
+  );
+  return found;
+}
+
+/** Pasangan hari–bulan (tanpa tahun) yang tertulis di teks, sebagai "MM-DD". */
+export function dayMonthsInText(text: string): Set<string> {
+  const found = new Set<string>();
+  const add = (m: number, d: number) => {
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31)
+      found.add(`${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  };
+  for (const m of text.matchAll(
+    new RegExp(`(\\d{1,2})${ORD}\\s+(${MONTH_RE})`, "gi"),
+  ))
+    add(monthOf(m[2] as string), Number(m[1]));
+  for (const m of text.matchAll(
+    new RegExp(`(${MONTH_RE})\\.?\\s+(\\d{1,2})(?!\\d)`, "gi"),
+  ))
+    add(monthOf(m[1] as string), Number(m[2]));
+  for (const m of text.matchAll(
+    new RegExp(`(\\d{1,2})${RANGE_SEP}(\\d{1,2})${ORD}\\s+(${MONTH_RE})`, "gi"),
+  )) {
+    add(monthOf(m[3] as string), Number(m[1]));
+    add(monthOf(m[3] as string), Number(m[2]));
+  }
+  return found;
 }

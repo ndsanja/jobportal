@@ -154,6 +154,15 @@ export function evaluateRequirement(
         detail: ok ? "Terbuka untuk WNI" : "Tidak terbuka untuk WNI",
       };
     }
+    case "eligibility.indonesia":
+      return value.eligible === true
+        ? { status: "met", detail: "Terbuka untuk WNI" }
+        : { status: "unmet", detail: "Tidak terbuka untuk WNI" };
+    case "requirement.gpa":
+      return {
+        status: "manual",
+        detail: `Pastikan IPK Anda minimal ${String(value.min)} (skala ${String(value.scale)})`,
+      };
     default:
       return { status: "manual", detail: "Cek manual" };
   }

@@ -5,6 +5,13 @@ export type OpportunityAttributes = {
   sponsorship?: "available" | "none" | "unknown";
   dama_mentioned?: boolean;
   attribution?: string | null;
+  /** Hasil riset otomatis (lihat src/server/research/opportunities.ts). */
+  research?: {
+    checked_at?: string;
+    official_facts?: number;
+    eligible_wni?: boolean | null;
+    deadline_precision?: "exact" | "day" | null;
+  };
 };
 
 export function readAttributes(value: Json): OpportunityAttributes {

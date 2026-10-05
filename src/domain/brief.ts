@@ -3,11 +3,13 @@ import { z } from "zod";
 /** Bagian panduan, dalam urutan tampil. */
 export const BRIEF_SECTIONS = [
   { id: "cara_daftar", heading: "Cara mendaftar & alur" },
+  { id: "jadwal", heading: "Jadwal & tenggat" },
   { id: "syarat", heading: "Syarat pemohon" },
   { id: "dokumen", heading: "Dokumen yang disiapkan" },
+  { id: "pendanaan", heading: "Pendanaan & manfaat" },
+  { id: "program", heading: "Jenjang, bidang & kuota" },
   { id: "biaya", heading: "Biaya" },
-  { id: "jadwal", heading: "Jadwal & jangka waktu" },
-  { id: "ketentuan", heading: "Ketentuan setelah disetujui" },
+  { id: "ketentuan", heading: "Ketentuan & kewajiban" },
   { id: "catatan", heading: "Catatan penting" },
 ] as const;
 

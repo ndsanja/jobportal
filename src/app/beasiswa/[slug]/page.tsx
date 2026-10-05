@@ -7,8 +7,9 @@ import { ClaimsPanel } from "@/components/claims-panel";
 import { SiteHeader } from "@/components/site-header";
 import { VerificationBadge } from "@/components/verification-badge";
 import { displayState } from "@/domain/opportunity";
+import { readAttributes } from "@/lib/attributes";
 import { loadBrief, loadClaims } from "@/lib/claims-query";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDeadline } from "@/lib/format";
 import { EVENT_KIND_LABEL, EVENT_KIND_TONE, levelsLabel } from "@/lib/labels";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -78,6 +79,7 @@ export default async function BeasiswaDetailPage({
     ? `${item.countries.flag} ${item.countries.name_id}`
     : item.region;
   const note = dataNote(item.attributes);
+  const research = readAttributes(item.attributes).research;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -100,10 +102,32 @@ export default async function BeasiswaDetailPage({
           {item.organizations?.name}
         </p>
 
+        {research?.eligible_wni === true && (
+          <p className="mt-3 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+            ✓ Terbuka untuk WNI (menurut sumber resmi)
+          </p>
+        )}
+        {research?.eligible_wni === false && (
+          <p className="mt-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-900 dark:bg-red-950 dark:text-red-100">
+            ✗ Menurut sumber resmi, program ini tidak terbuka untuk pemegang
+            paspor Indonesia. Lihat rincian bukti di bawah.
+          </p>
+        )}
+
         {state !== "closed" && daysLeft !== null && daysLeft >= 0 && (
           <p className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
             ⏳ {daysLeft === 0 ? "Tenggat hari ini" : `${daysLeft} hari lagi`} ·
-            tenggat {formatDate(item.closes_at as string)}
+            tenggat{" "}
+            {formatDeadline(
+              item.closes_at as string,
+              research?.deadline_precision,
+            )}
+            {research?.deadline_precision === "day" && (
+              <span className="block text-xs opacity-80">
+                Jam penutupan tidak tercantum di sumber; daftarlah sebelum hari
+                itu berakhir di zona waktu penyelenggara.
+              </span>
+            )}
           </p>
         )}
 
@@ -117,6 +141,12 @@ export default async function BeasiswaDetailPage({
             label="Terakhir diverifikasi"
             value={formatDate(item.last_verified_at)}
           />
+          {research?.checked_at && (
+            <Fact
+              label="Diriset ulang mesin kami"
+              value={`${formatDate(research.checked_at)} · ${research.official_facts ?? 0} fakta resmi`}
+            />
+          )}
           <Fact label="Tingkat keyakinan data" value={`${item.confidence}%`} />
         </dl>
 
@@ -158,6 +188,16 @@ export default async function BeasiswaDetailPage({
                     <span className="text-zinc-600 dark:text-zinc-400">
                       {event.label}
                     </span>
+                  )}
+                  {event.source_url && (
+                    <a
+                      href={event.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      className="text-xs text-zinc-500 underline underline-offset-4"
+                    >
+                      sumber ↗
+                    </a>
                   )}
                 </li>
               ))}

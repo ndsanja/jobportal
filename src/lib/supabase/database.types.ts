@@ -526,6 +526,7 @@ export type Database = {
       };
       opportunity_events: {
         Row: {
+          claim_id: string | null;
           created_at: string;
           date_precision: string;
           ends_on: string | null;
@@ -538,6 +539,7 @@ export type Database = {
           starts_on: string;
         };
         Insert: {
+          claim_id?: string | null;
           created_at?: string;
           date_precision?: string;
           ends_on?: string | null;
@@ -550,6 +552,7 @@ export type Database = {
           starts_on: string;
         };
         Update: {
+          claim_id?: string | null;
           created_at?: string;
           date_precision?: string;
           ends_on?: string | null;
@@ -760,6 +763,92 @@ export type Database = {
           years_experience?: number | null;
         };
         Relationships: [];
+      };
+      research_pages: {
+        Row: {
+          content_hash: string;
+          last_changed_at: string;
+          last_fetched_at: string;
+          outcome: string | null;
+          page_date: string | null;
+          subject_key: string;
+          url: string;
+        };
+        Insert: {
+          content_hash: string;
+          last_changed_at?: string;
+          last_fetched_at?: string;
+          outcome?: string | null;
+          page_date?: string | null;
+          subject_key: string;
+          url: string;
+        };
+        Update: {
+          content_hash?: string;
+          last_changed_at?: string;
+          last_fetched_at?: string;
+          outcome?: string | null;
+          page_date?: string | null;
+          subject_key?: string;
+          url?: string;
+        };
+        Relationships: [];
+      };
+      research_subjects: {
+        Row: {
+          config: Json;
+          created_at: string;
+          enabled: boolean;
+          last_run_at: string | null;
+          last_stats: Json | null;
+          last_status: string | null;
+          next_run_at: string | null;
+          opportunity_id: string | null;
+          profile: string;
+          subject_key: string;
+          subject_type: string;
+          track: Database["public"]["Enums"]["track"] | null;
+          updated_at: string;
+        };
+        Insert: {
+          config?: Json;
+          created_at?: string;
+          enabled?: boolean;
+          last_run_at?: string | null;
+          last_stats?: Json | null;
+          last_status?: string | null;
+          next_run_at?: string | null;
+          opportunity_id?: string | null;
+          profile?: string;
+          subject_key: string;
+          subject_type: string;
+          track?: Database["public"]["Enums"]["track"] | null;
+          updated_at?: string;
+        };
+        Update: {
+          config?: Json;
+          created_at?: string;
+          enabled?: boolean;
+          last_run_at?: string | null;
+          last_stats?: Json | null;
+          last_status?: string | null;
+          next_run_at?: string | null;
+          opportunity_id?: string | null;
+          profile?: string;
+          subject_key?: string;
+          subject_type?: string;
+          track?: Database["public"]["Enums"]["track"] | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "research_subjects_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       source_pages: {
         Row: {

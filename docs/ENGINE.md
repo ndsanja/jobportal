@@ -44,7 +44,7 @@
 |---|---|---|
 | Kutipan wajib ada di teks halaman | Fakta karangan | `validateClaims`, `validateCandidates`, `validateInsight` |
 | **Angka & tanggal wajib tertulis di kutipan** (5.000 / 5,000 / "5 juta" / "two years"; "under 31" → maks 30) | Usia, biaya, IPK, tenggat yang salah | `src/domain/grounding.ts` |
-| Tanggal jadwal hanya untuk siklus berjalan (−400 hari s.d. +3 tahun) | Tenggat tahun lama | `extract.ts` |
+| Tanggal jadwal: −6 tahun s.d. +3 tahun; tanggal lampau disimpan sebagai **riwayat**, bukan tenggat aktif | Tenggat tahun lama tampil sebagai aktif | `extract.ts`, `timeline.ts` |
 | Halaman usang/arsip/khusus negara lain dilewati; tanggal pembaruan dibaca deterministik (teks & metadata HTML) | Info kedaluwarsa | `page-date.ts`, `gather.ts` |
 | Bukti dari halaman >2 tahun tidak dihitung | Fakta lama menang | `isStaleEvidence` |
 | Pemeriksa fakta AI melihat semua klaim sekaligus | Pertentangan antar-sumber (mis. "daftar langsung" vs "wajib ballot") | `verify.ts` |
@@ -93,4 +93,7 @@ Rancangannya sudah generik:
 - Mesin hanya sebaik sumber yang bisa dibaca. Halaman resmi yang memblokir bot atau berupa gambar/PDF hasil pindai bisa terlewat (Firecrawl membantu untuk JavaScript/PDF).
 - Pemeriksa fakta menilai konsistensi kutipan, negara, dan waktu, bukan kebenaran di dunia nyata. Kebenaran tetap bersandar pada sumber resmi.
 - Teks iklan Adzuna berupa cuplikan pendek, sehingga penilaian WNI untuk lowongan Adzuna sering "mungkin"/"belum jelas". Sumber ATS (deskripsi lengkap) memberi hasil lebih tajam.
+- **Daftar perusahaan DAMA:** situs resmi wilayah DAMA umumnya tidak memublikasikan nama perusahaan berperjanjian. Sumber utama karena itu adalah iklan lowongan yang menyebut DAMA secara eksplisit (label "Iklan menyebut DAMA", sering lewat agen rekrutmen), ditambah halaman resmi/pihak ketiga bila ada. "Terverifikasi" hanya bila situs resmi atau ≥2 domain web berbeda menyebutnya.
+- **Prediksi siklus berikutnya** dihitung dari tanggal siklus-siklus sebelumnya yang berkutipan; ini perkiraan, bukan pengumuman.
+- Paket Firecrawl membatasi kecepatan pencarian (HTTP 429), sehingga riset dibatasi 2 peluang per run dan dijeda 4 detik per pencarian.
 - Agen penemu butuh persetujuan admin sebelum program baru tampil (sengaja, demi akurasi).

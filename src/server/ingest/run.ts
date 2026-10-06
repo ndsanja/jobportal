@@ -25,6 +25,8 @@ import type { FetchLike, IngestSource } from "./types";
 type SourceRow = Database["public"]["Tables"]["sources"]["Row"];
 
 const SCHEDULE_MS: Record<string, number | null> = {
+  // Toleransi di bawah 20 menit agar tidak terlewat satu putaran cron karena selisih detik.
+  "20m": 15 * 60 * 1000,
   hourly: 60 * 60 * 1000,
   "6h": 6 * 60 * 60 * 1000,
   "12h": 12 * 60 * 60 * 1000,

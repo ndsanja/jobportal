@@ -132,14 +132,22 @@ export function nameTokens(name: string): string[] {
     );
 }
 
+/** Bentuk tunggal sederhana untuk perbandingan nama ("Masters" = "Master"), tanpa merusak "Erasmus". */
+const singular = (t: string): string =>
+  t.length > 4 && t.endsWith("s") && !/(us|ss|is)$/.test(t)
+    ? t.slice(0, -1)
+    : t;
+const compareTokens = (name: string): Set<string> =>
+  new Set(nameTokens(name).map(singular));
+
 /** Kunci dedupe kandidat: token bermakna, diurutkan. */
 export const nameKey = (name: string): string =>
-  [...new Set(nameTokens(name))].sort().join(" ");
+  [...compareTokens(name)].sort().join(" ");
 
 /** Kemiripan Jaccard token nama (0–1). */
 export function nameSimilarity(a: string, b: string): number {
-  const ta = new Set(nameTokens(a));
-  const tb = new Set(nameTokens(b));
+  const ta = compareTokens(a);
+  const tb = compareTokens(b);
   if (ta.size === 0 || tb.size === 0) return 0;
   let inter = 0;
   for (const t of ta) if (tb.has(t)) inter += 1;
@@ -148,8 +156,8 @@ export function nameSimilarity(a: string, b: string): number {
 
 /** Nama yang satu memuat seluruh token nama lain (min. 2 token), mis. "Erasmus Mundus" ⊂ "Erasmus Mundus Joint Masters". */
 function containsName(a: string, b: string): boolean {
-  const ta = new Set(nameTokens(a));
-  const tb = new Set(nameTokens(b));
+  const ta = compareTokens(a);
+  const tb = compareTokens(b);
   const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
   if (small.size < 2) return false;
   for (const t of small) if (!large.has(t)) return false;
@@ -345,7 +353,11 @@ export function validateCandidates(
     candidates.push({
       name: c.name,
       nameKey: key,
-      organizer: c.organizer?.trim() || null,
+      organizer:
+        c.organizer &&
+        !/^(null|none|n\/?a|-|unknown)$/i.test(c.organizer.trim())
+          ? c.organizer.trim()
+          : null,
       kind: c.kind,
       countryCode: c.country ? c.country.toUpperCase() : null,
       levels: [...new Set(c.levels ?? [])],

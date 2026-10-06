@@ -276,3 +276,28 @@ describe("gabung kandidat mirip dalam satu run", () => {
     ).toBe("a");
   });
 });
+
+describe("findDuplicate bentuk jamak", () => {
+  it("'Joint Master Degree' = 'Joint Masters'", () => {
+    const known = [
+      {
+        id: "em",
+        title: "Erasmus Mundus Joint Masters",
+        organizationName: "Erasmus+ (Uni Eropa)",
+        officialUrl:
+          "https://erasmus-plus.ec.europa.eu/opportunities/individuals/students/erasmus-mundus-joint-masters",
+        applyUrl: null,
+      },
+    ];
+    expect(
+      findDuplicate(
+        {
+          name: "Erasmus Mundus Joint Master Degree (EMJMD)",
+          officialUrl:
+            "https://erasmus-plus.ec.europa.eu/opportunities/opportunities-for-individuals/students/erasmus-mundus-joint-masters",
+        },
+        known,
+      )?.id,
+    ).toBe("em");
+  });
+});

@@ -112,6 +112,18 @@ describe("damaAdQuote", () => {
     ).toBe("Visa Sponsorship Available Under DAMA for the Right Candidate.");
     expect(damaAdQuote("Kitchen hand, Adama Street, Darwin.")).toBeNull();
     expect(
+      damaAdQuote(
+        "Community Pharmacist – Cairns, Far North QLD Full-Time Visa Sponsorship (incl. DAMA options) – Relocation Assistance",
+      ),
+    ).toBe(
+      "Community Pharmacist – Cairns, Far North QLD Full-Time Visa Sponsorship (incl. DAMA options) – Relocation Assistance",
+    );
+    const long = damaAdQuote(
+      `${"word ".repeat(60)}Visa Sponsorship Available Under DAMA for the Right Candidate ${"more ".repeat(60)}`,
+    );
+    expect(long?.length).toBeLessThan(230);
+    expect(long).toContain("Under DAMA for the Right Candidate");
+    expect(
       damaAdQuote("Sponsorship via the Designated Area Migration Agreement"),
     ).toBe("Sponsorship via the Designated Area Migration Agreement");
   });

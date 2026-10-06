@@ -385,7 +385,8 @@ export async function runDamaEmployerDiscovery(
 
   for (const e of found.values()) {
     const prior = existing.get(e.nameKey);
-    const evidence = [...(prior?.evidence ?? []), ...e.evidence_list].filter(
+    // Bukti terbaru menang untuk URL yang sama (kutipan bisa diperbaiki).
+    const evidence = [...e.evidence_list, ...(prior?.evidence ?? [])].filter(
       (x, i, all) => all.findIndex((y) => y.url === x.url) === i,
     );
     const verified = isVerifiedEmployer(evidence);

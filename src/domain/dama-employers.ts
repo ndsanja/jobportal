@@ -137,24 +137,34 @@ export function pickFollowLinks(
   return out;
 }
 
+/** Akhir kalimat, kecuali singkatan umum di iklan ("incl.", "e.g.", "Pty.", "Ltd."). */
+const SENTENCE_END =
+  /(?<!\b(?:incl|e\.g|i\.e|etc|approx|min|max|no|vs|inc|pty|ltd|St|Dr|Mt))[.!?](?=\s|$)|\n/gi;
 const DAMA_AD = /\bDAMA\b|designated area migration agreement/i;
 
 /** Kalimat iklan lowongan yang menyebut DAMA secara eksplisit (bukti pemberi kerja merekrut lewat DAMA). */
 export function damaAdQuote(text: string): string | null {
   const match = DAMA_AD.exec(text);
   if (!match) return null;
-  const before = text.slice(0, match.index);
-  const start = Math.max(
-    0,
-    ...[". ", "! ", "? ", "\n", " – ", " - "].map((sep) => {
-      const i = before.lastIndexOf(sep);
-      return i < 0 ? 0 : i + sep.length;
-    }),
-    match.index - 160,
-  );
-  const after = text.slice(match.index);
-  const endRel = after.search(/[.!?\n](\s|$)| – /);
-  const end =
-    match.index + Math.min(endRel < 0 ? after.length : endRel + 1, 200);
+  const at = match.index;
+  // Awal kalimat (maks. 100 karakter ke belakang), akhir kalimat (maks. 100 karakter ke depan).
+  const before = text.slice(Math.max(0, at - 100), at);
+  let sentenceStart = -1;
+  for (const m of before.matchAll(SENTENCE_END)) sentenceStart = m.index;
+  let start =
+    sentenceStart >= 0
+      ? at - before.length + sentenceStart + 1
+      : Math.max(0, at - 100);
+  if (sentenceStart < 0 && start > 0) {
+    const space = text.indexOf(" ", start);
+    if (space >= 0 && space < at) start = space + 1;
+  }
+  const after = text.slice(at, at + match[0].length + 100);
+  const stop = after.search(SENTENCE_END);
+  let end = stop >= 0 ? at + stop + 1 : at + after.length;
+  if (stop < 0 && end < text.length) {
+    const space = text.lastIndexOf(" ", end);
+    if (space > at + match[0].length) end = space;
+  }
   return text.slice(start, end).trim();
 }

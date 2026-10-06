@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { hostnameOf } from "@/lib/format";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -21,13 +22,16 @@ export async function DamaEmployersPanel() {
   return (
     <section className="mt-10">
       <h2 className="text-base font-semibold">
-        Perusahaan yang tercatat punya perjanjian DAMA ({employers.length})
+        Perusahaan yang merekrut lewat DAMA ({employers.length})
       </h2>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Dikumpulkan otomatis dari situs representatif wilayah DAMA dan sumber
-        pihak ketiga. DAMA hanya bisa lewat sponsor pemberi kerja, jadi daftar
-        ini membantu Anda tahu ke mana melamar. Label &quot;terverifikasi&quot;
-        berarti disebut situs resmi atau minimal dua sumber berbeda.
+        Dikumpulkan otomatis dari iklan lowongan yang menyebut DAMA secara
+        eksplisit, situs representatif wilayah DAMA, dan sumber pihak ketiga.
+        DAMA hanya bisa lewat sponsor pemberi kerja, jadi daftar ini membantu
+        Anda tahu ke mana melamar. &quot;Terverifikasi&quot; berarti disebut
+        situs resmi atau minimal dua sumber berbeda; &quot;Iklan menyebut
+        DAMA&quot; berarti iklan lowongannya sendiri menawarkan sponsor DAMA
+        (bisa lewat agen rekrutmen atas nama klien).
       </p>
       {employers.length === 0 ? (
         <p className="mt-4 rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
@@ -37,6 +41,21 @@ export async function DamaEmployersPanel() {
         <ul className="mt-4 space-y-2">
           {employers.map((e) => {
             const evidence = (e.evidence ?? []) as Evidence[];
+            const fromAd = evidence.some((x) => x.tier === "job_ad");
+            const badge = e.verified
+              ? {
+                  label: "Terverifikasi",
+                  tone: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
+                }
+              : fromAd
+                ? {
+                    label: "Iklan menyebut DAMA",
+                    tone: "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200",
+                  }
+                : {
+                    label: "Belum terverifikasi",
+                    tone: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
+                  };
             return (
               <li
                 key={e.id}
@@ -45,9 +64,9 @@ export async function DamaEmployersPanel() {
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-medium">{e.name}</span>
                   <span
-                    className={`rounded px-1.5 py-0.5 text-xs font-medium ${e.verified ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"}`}
+                    className={`rounded px-1.5 py-0.5 text-xs font-medium ${badge.tone}`}
                   >
-                    {e.verified ? "Terverifikasi" : "Belum terverifikasi"}
+                    {badge.label}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500">
@@ -86,16 +105,31 @@ export async function DamaEmployersPanel() {
                   <ul className="mt-1 space-y-1">
                     {evidence.map((x) => (
                       <li key={x.url}>
-                        <a
-                          href={x.url}
-                          target="_blank"
-                          rel="noopener noreferrer nofollow"
-                          className="underline underline-offset-4"
-                        >
-                          {hostnameOf(x.url)}
-                        </a>{" "}
+                        {x.tier === "job_ad" ? (
+                          <Link
+                            href={x.url}
+                            className="underline underline-offset-4"
+                          >
+                            iklan lowongan
+                          </Link>
+                        ) : (
+                          <a
+                            href={x.url}
+                            target="_blank"
+                            rel="noopener noreferrer nofollow"
+                            className="underline underline-offset-4"
+                          >
+                            {hostnameOf(x.url)}
+                          </a>
+                        )}{" "}
                         <span className="text-zinc-400">
-                          ({x.tier === "official" ? "resmi" : "pihak ketiga"})
+                          (
+                          {x.tier === "official"
+                            ? "resmi"
+                            : x.tier === "job_ad"
+                              ? "iklan pemberi kerja/agen"
+                              : "pihak ketiga"}
+                          )
                         </span>
                         <blockquote className="mt-0.5 border-l-2 border-zinc-300 pl-2 italic text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
                           “{x.quote}”

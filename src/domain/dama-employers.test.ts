@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  damaAdQuote,
   isVerifiedEmployer,
   pickFollowLinks,
   validateDamaEmployers,
@@ -99,5 +100,30 @@ describe("pickFollowLinks", () => {
       "https://dama.example.gov.au/employers",
       "https://dama.example.gov.au/business-case-studies",
     ]);
+  });
+});
+
+describe("damaAdQuote", () => {
+  it("mengambil kalimat iklan yang menyebut DAMA", () => {
+    expect(
+      damaAdQuote(
+        "Great pay. Visa Sponsorship Available Under DAMA for the Right Candidate. Apply now.",
+      ),
+    ).toBe("Visa Sponsorship Available Under DAMA for the Right Candidate.");
+    expect(damaAdQuote("Kitchen hand, Adama Street, Darwin.")).toBeNull();
+    expect(
+      damaAdQuote("Sponsorship via the Designated Area Migration Agreement"),
+    ).toBe("Sponsorship via the Designated Area Migration Agreement");
+  });
+});
+
+describe("isVerifiedEmployer dengan iklan", () => {
+  it("dua iklan lowongan tidak dihitung sebagai dua domain", () => {
+    expect(
+      isVerifiedEmployer([
+        { url: "/lowongan/a", tier: "job_ad" },
+        { url: "/lowongan/b", tier: "job_ad" },
+      ]),
+    ).toBe(false);
   });
 });

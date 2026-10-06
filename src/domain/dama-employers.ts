@@ -85,14 +85,17 @@ export const isVerifiedEmployer = (
   evidence: Array<{ url: string; tier: string }>,
 ): boolean => {
   if (evidence.some((e) => e.tier === "official")) return true;
+  // Iklan lowongan dihitung terpisah (label sendiri), bukan sebagai domain independen.
   const domains = new Set(
-    evidence.map((e) => {
-      try {
-        return new URL(e.url).hostname.replace(/^www\./, "");
-      } catch {
-        return e.url;
-      }
-    }),
+    evidence
+      .filter((e) => e.tier !== "job_ad")
+      .map((e) => {
+        try {
+          return new URL(e.url).hostname.replace(/^www\./, "");
+        } catch {
+          return e.url;
+        }
+      }),
   );
   return domains.size >= 2;
 };
@@ -132,4 +135,26 @@ export function pickFollowLinks(
     out.push(clean);
   }
   return out;
+}
+
+const DAMA_AD = /\bDAMA\b|designated area migration agreement/i;
+
+/** Kalimat iklan lowongan yang menyebut DAMA secara eksplisit (bukti pemberi kerja merekrut lewat DAMA). */
+export function damaAdQuote(text: string): string | null {
+  const match = DAMA_AD.exec(text);
+  if (!match) return null;
+  const before = text.slice(0, match.index);
+  const start = Math.max(
+    0,
+    ...[". ", "! ", "? ", "\n", " – ", " - "].map((sep) => {
+      const i = before.lastIndexOf(sep);
+      return i < 0 ? 0 : i + sep.length;
+    }),
+    match.index - 160,
+  );
+  const after = text.slice(match.index);
+  const endRel = after.search(/[.!?\n](\s|$)| – /);
+  const end =
+    match.index + Math.min(endRel < 0 ? after.length : endRel + 1, 200);
+  return text.slice(start, end).trim();
 }

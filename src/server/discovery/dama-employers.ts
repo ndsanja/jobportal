@@ -4,11 +4,13 @@ import { parseAtsBoard } from "@/domain/ats-discovery";
 import { classifyTier } from "@/domain/claims";
 import {
   type DamaEmployerCandidate,
+  damaAdQuote,
   isVerifiedEmployer,
   pickFollowLinks,
   validateDamaEmployers,
 } from "@/domain/dama-employers";
 import { type PageLink, pickQueries } from "@/domain/discovery";
+import { normalizeOrgName } from "@/domain/text";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { callJsonModel, type FetchLike } from "@/server/ai/json-call";
 import { DEFAULT_MODEL } from "@/server/ai/openrouter";
@@ -34,6 +36,7 @@ export type DamaEmployerStats = {
   pagesRead: number;
   pagesFailed: number;
   followed?: number;
+  fromJobAds?: number;
   employersFound: number;
   rejected: number;
   created: number;
@@ -78,6 +81,65 @@ async function extractEmployers(
         : { ok: true, value: checked };
     },
   );
+}
+
+/**
+ * Pemberi kerja yang iklan lowongannya (di katalog kita) menyebut DAMA secara eksplisit. Buktinya
+ * kalimat iklan itu sendiri; tautannya ke halaman lowongan di situs ini.
+ */
+async function employersFromJobAds(db: Db) {
+  const { data: texts } = await db
+    .from("opportunity_texts")
+    .select("opportunity_id, text")
+    .or("text.ilike.%dama%,text.ilike.%designated area migration%")
+    .limit(500);
+  const quoteById = new Map<string, string>();
+  for (const t of texts ?? []) {
+    const quote = damaAdQuote(t.text);
+    if (quote) quoteById.set(t.opportunity_id, quote);
+  }
+  const ids = [...quoteById.keys()];
+  const out: Array<DamaEmployerCandidate & { evidence_list: Evidence[] }> = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data: jobs } = await db
+      .from("opportunities")
+      .select("id, slug, title, organizations(name, website)")
+      .in("id", ids.slice(i, i + 100))
+      .eq("kind", "job")
+      .eq("country_code", "AU");
+    for (const job of jobs ?? []) {
+      const org = job.organizations as {
+        name: string;
+        website: string | null;
+      } | null;
+      const quote = quoteById.get(job.id);
+      if (!org?.name || !quote) continue;
+      const nameKey = normalizeOrgName(org.name);
+      if (nameKey.length < 2) continue;
+      const evidence: Evidence = {
+        url: `/lowongan/${job.slug}`,
+        quote: `${job.title}: ${quote}`.slice(0, 600),
+        tier: "job_ad",
+      };
+      const existing = out.find((e) => e.nameKey === nameKey);
+      if (existing) {
+        if (existing.evidence_list.length < 5)
+          existing.evidence_list.push(evidence);
+        continue;
+      }
+      out.push({
+        name: org.name,
+        nameKey,
+        region: null,
+        industry: null,
+        website: org.website,
+        careersUrl: null,
+        evidence: evidence.quote,
+        evidence_list: [evidence],
+      });
+    }
+  }
+  return out;
 }
 
 /** Menandai lowongan Australia dari pemberi kerja DAMA terverifikasi (jalur DAMA + atribut sumber). */
@@ -264,6 +326,20 @@ export async function runDamaEmployerDiscovery(
   };
   await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
   stats.followed = followed;
+  // Iklan lowongan yang menyebut DAMA: sumber paling langsung tentang siapa yang merekrut lewat DAMA.
+  const fromAds = await employersFromJobAds(db);
+  stats.fromJobAds = fromAds.length;
+  for (const e of fromAds) {
+    const entry = found.get(e.nameKey);
+    if (!entry) {
+      found.set(e.nameKey, e);
+      continue;
+    }
+    entry.website ??= e.website;
+    for (const x of e.evidence_list)
+      if (!entry.evidence_list.some((y) => y.url === x.url))
+        entry.evidence_list.push(x);
+  }
   stats.employersFound = found.size;
 
   if (options.dryRun) {
@@ -272,7 +348,9 @@ export async function runDamaEmployerDiscovery(
       region: e.region,
       tier: e.evidence_list.some((x) => x.tier === "official")
         ? "official"
-        : "community",
+        : e.evidence_list.some((x) => x.tier === "job_ad")
+          ? "job_ad"
+          : "community",
       source: e.evidence_list[0]?.url ?? "",
       careersUrl: e.careersUrl,
     }));
